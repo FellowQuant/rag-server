@@ -1,0 +1,139 @@
+# Requirements: FellowQuant RAG Server
+
+**Defined:** 2026-02-12
+**Core Value:** Accurate retrieval and synthesis from dense quantitative finance documents — tables stay as tables, formulas stay as formulas, and citations trace back to exact sources.
+
+## v1 Requirements
+
+Requirements for initial release. Each maps to roadmap phases.
+
+### Document Ingestion
+
+- [ ] **INGEST-01**: User can upload PDF files and have them parsed with layout-aware extraction preserving tables, formulas, and multi-column structure
+- [ ] **INGEST-02**: User can upload LaTeX source files (.tex) and have them parsed preserving mathematical notation as ground-truth LaTeX
+- [ ] **INGEST-03**: User can upload Jupyter notebooks (.ipynb) and have them parsed preserving code cells, markdown, and outputs
+- [ ] **INGEST-04**: System detects and preserves code blocks with language identification during document parsing
+- [ ] **INGEST-05**: System chunks documents using formula-aware, table-aware splitting that never breaks atomic content units
+- [ ] **INGEST-06**: System tracks document indexing status (pending → processing → indexed → failed) queryable via API
+
+### Storage & Indexing
+
+- [ ] **STORE-01**: System stores vector embeddings in a persistent vector database (ChromaDB or equivalent) for semantic similarity search
+- [ ] **STORE-02**: System stores document metadata (title, author, page count, format, hash) in a relational database (SQLite)
+- [ ] **STORE-03**: System stores chunk metadata (document_id, page_number, section_header, chunk_type) linked to source documents
+- [ ] **STORE-04**: System supports 100+ document corpus with performant indexing and retrieval
+
+### Retrieval & Search
+
+- [ ] **RETR-01**: User can perform semantic search using vector embeddings to find conceptually relevant chunks
+- [ ] **RETR-02**: User can perform hybrid search combining semantic (vector) and keyword (BM25) retrieval with reciprocal rank fusion
+- [ ] **RETR-03**: System reranks initial retrieval results using a cross-encoder model for improved precision
+- [ ] **RETR-04**: Every retrieved chunk includes citation metadata: source document, page number, and section heading
+- [ ] **RETR-05**: User can perform cross-document synthesis queries that compare concepts across multiple sources using agentic multi-query patterns
+
+### LLM Integration
+
+- [ ] **LLM-01**: System serves a local LLM (via Ollama or vLLM) for answer generation without cloud API dependencies
+- [ ] **LLM-02**: System generates answers from retrieved chunks with inline citations referencing source documents and pages
+- [ ] **LLM-03**: System supports streaming LLM responses as they generate for real-time output
+
+### REST API
+
+- [ ] **API-01**: User can ingest documents via POST endpoint with file upload
+- [ ] **API-02**: User can list all documents with metadata and indexing status via GET endpoint
+- [ ] **API-03**: User can delete documents and their associated chunks/embeddings via DELETE endpoint
+- [ ] **API-04**: User can query the knowledge base via retrieve endpoint returning ranked chunks with citations
+- [ ] **API-05**: User can query the knowledge base via ask endpoint returning LLM-synthesized answers with citations
+- [ ] **API-06**: User can check document indexing status via status endpoint
+
+### MCP Server
+
+- [ ] **MCP-01**: System exposes an MCP server accessible from Claude Code via stdio transport
+- [ ] **MCP-02**: MCP server provides a `retrieve` tool that returns raw chunks with citations for a given query
+- [ ] **MCP-03**: MCP server provides an `ask` tool that returns LLM-synthesized answers with citations for a given query
+- [ ] **MCP-04**: MCP server provides an `ingest_document` tool to add documents to the corpus from Claude Code
+- [ ] **MCP-05**: MCP server provides a `list_documents` tool to view corpus inventory and indexing status
+- [ ] **MCP-06**: MCP server provides a `delete_document` tool to remove documents from the corpus
+
+## v2 Requirements
+
+Deferred to future release. Tracked but not in current roadmap.
+
+### Advanced Retrieval
+
+- **ADV-01**: System caches query results for repeated queries (LRU or Redis)
+- **ADV-02**: System tracks citation graphs between documents ("which papers reference this concept")
+- **ADV-03**: System supports incremental re-indexing without full corpus rebuild
+
+### Advanced Ingestion
+
+- **ADV-04**: System extracts figure captions and associates them with surrounding text context
+- **ADV-05**: System supports custom chunking strategies configurable per document type
+- **ADV-06**: System detects duplicate documents by content hash and prevents re-ingestion
+
+### Multi-language
+
+- **ADV-07**: System supports non-English documents (multi-lingual embeddings and retrieval)
+
+## Out of Scope
+
+Explicitly excluded. Documented to prevent scope creep.
+
+| Feature | Reason |
+|---------|--------|
+| Web UI or dashboard | API-only for v1; consumed programmatically from Claude Code and scripts |
+| Cloud-hosted deployment | Privacy requirement — runs locally with GPU only |
+| Proprietary LLM API dependency | Local models only — no OpenAI/Anthropic API for generation |
+| Real-time market data integration | This is a research knowledge base, not a trading system |
+| Mobile access | Programmatic API consumption only |
+| User authentication / multi-tenancy | Single-user local deployment |
+| Document versioning | Delete + re-ingest if updated; low corpus churn |
+| OCR for scanned PDFs | Different problem domain; require digital PDFs |
+| Fine-tuning custom embeddings | High complexity, marginal gains over SOTA models |
+| Real-time filesystem watching | Manual ingestion via API; no auto-sync |
+
+## Traceability
+
+Which phases cover which requirements. Updated during roadmap creation.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| INGEST-01 | TBD | Pending |
+| INGEST-02 | TBD | Pending |
+| INGEST-03 | TBD | Pending |
+| INGEST-04 | TBD | Pending |
+| INGEST-05 | TBD | Pending |
+| INGEST-06 | TBD | Pending |
+| STORE-01 | TBD | Pending |
+| STORE-02 | TBD | Pending |
+| STORE-03 | TBD | Pending |
+| STORE-04 | TBD | Pending |
+| RETR-01 | TBD | Pending |
+| RETR-02 | TBD | Pending |
+| RETR-03 | TBD | Pending |
+| RETR-04 | TBD | Pending |
+| RETR-05 | TBD | Pending |
+| LLM-01 | TBD | Pending |
+| LLM-02 | TBD | Pending |
+| LLM-03 | TBD | Pending |
+| API-01 | TBD | Pending |
+| API-02 | TBD | Pending |
+| API-03 | TBD | Pending |
+| API-04 | TBD | Pending |
+| API-05 | TBD | Pending |
+| API-06 | TBD | Pending |
+| MCP-01 | TBD | Pending |
+| MCP-02 | TBD | Pending |
+| MCP-03 | TBD | Pending |
+| MCP-04 | TBD | Pending |
+| MCP-05 | TBD | Pending |
+| MCP-06 | TBD | Pending |
+
+**Coverage:**
+- v1 requirements: 30 total
+- Mapped to phases: 0
+- Unmapped: 30 ⚠️
+
+---
+*Requirements defined: 2026-02-12*
+*Last updated: 2026-02-12 after initial definition*
