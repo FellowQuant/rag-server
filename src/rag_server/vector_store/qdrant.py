@@ -112,13 +112,18 @@ class QdrantStore:
         )
 
     async def get_collection_info(self) -> dict[str, Any]:
-        """Return collection stats (vectors_count, indexed_vectors_count, etc.)."""
+        """Return collection stats (points_count, indexed_vectors_count, etc.).
+
+        Note: vectors_count was removed from CollectionInfo in qdrant-client >=1.14.
+        Use points_count for the total number of indexed points.
+        """
         info = await self._client.get_collection(self._collection)
         return {
             "name": self._collection,
-            "vectors_count": info.vectors_count,
-            "indexed_vectors_count": info.indexed_vectors_count,
+            # vectors_count removed in qdrant-client >=1.14 — use points_count
             "points_count": info.points_count,
+            "indexed_vectors_count": info.indexed_vectors_count,
+            "segments_count": info.segments_count,
             "status": info.status,
         }
 
