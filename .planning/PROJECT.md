@@ -47,10 +47,14 @@ Accurate retrieval and synthesis from dense quantitative finance documents — t
 - Dual-column academic paper layouts
 - Figures and charts with captions that provide context
 
-**Candidate technologies identified:**
-- **RAGFlow** — DeepDoc engine for layout-aware PDF parsing, table extraction, Apache 2.0
-- **PaperQA** — Scientific paper RAG with precise citations and agentic multi-source synthesis, MIT
-- **Marker** — Best-in-class PDF-to-Markdown converter with LaTeX and code detection, GPL-3.0
+**Technology stack (research-validated 2026-02-18):**
+- **Docling** (IBM) — Primary PDF parser; 97.9% table accuracy (CVPR 2025 benchmark); dedicated Granite-Docling VLM converts formula images to LaTeX; DocLayNet handles dual-column academic layouts; Apache 2.0
+- **Marker** — Fast-path fallback parser (0.12s/page vs Docling's 4s/page); used for text-dense PDFs without complex tables/formulas; GPL-3.0
+- **BGE-M3** (BAAI) — Primary embedding model; unique three-mode output (dense + sparse + multi-vector) from single inference pass; enables full hybrid retrieval without multiple model loads; 0.9GB VRAM; MIT
+- **Qwen3-Reranker-0.6B** — Cross-encoder reranker; ~61 BEIR nDCG@10 (~7 points above bge-reranker-large); Apache 2.0; Qwen3 stack cohesion with embedding model
+- **Qdrant** (local Docker) — Vector store; required for BGE-M3 multi-vector storage and future ColFlor visual retrieval; outperforms ChromaDB for production use cases
+- **Ollama** — Local LLM serving (v1); OpenAI-compatible API; vLLM as v2 upgrade path
+- **rank-bm25** — BM25 keyword index for hybrid retrieval; FinMTEB (2025) confirms BM25 surprisingly outperforms dense-only on financial STS tasks
 
 **Integration target:** Claude Code via MCP protocol — the primary consumption interface while coding.
 
@@ -68,10 +72,16 @@ Accurate retrieval and synthesis from dense quantitative finance documents — t
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| API + MCP only (no UI) | Consumed programmatically from Claude Code and scripts | — Pending |
-| Local LLM for generation | Privacy, no API costs, self-contained operation | — Pending |
-| Both retrieve and ask MCP modes | Flexibility: raw chunks for Claude Code reasoning, synthesized answers for quick queries | — Pending |
-| Research best RAG stack before committing | Multiple viable options (RAGFlow, PaperQA, Marker combo) — need data-driven choice | — Pending |
+| API + MCP only (no UI) | Consumed programmatically from Claude Code and scripts | Confirmed |
+| Local LLM for generation | Privacy, no API costs, self-contained operation | Confirmed — Ollama v1 |
+| Both retrieve and ask MCP modes | Flexibility: raw chunks for Claude Code reasoning, synthesized answers for quick queries | Confirmed |
+| Qdrant over ChromaDB | BGE-M3 requires multi-vector storage (sparse + dense fields); ChromaDB cannot support this; Qdrant runs locally via Docker with no cloud dependency | Confirmed |
+| Docling as primary parser | 97.9% table accuracy + dedicated formula VLM (Granite-Docling) — resolves the hardest parsing problems in quant finance docs; Marker retained as fast-path fallback | Confirmed |
+| BGE-M3 as embedding model | Only open-source model producing dense + sparse + multi-vector from single inference; enables three-mode hybrid retrieval mandatory for finance queries per FinMTEB (2025) | Confirmed |
+| Three-mode hybrid retrieval | FinMTEB confirms BM25 outperforms dense-only on financial STS; RRF fusion of BM25 + BGE-M3 dense + BGE-M3 sparse is the recommended approach | Confirmed |
+| Qwen3-Reranker-0.6B as reranker | Apache 2.0; ~61 BEIR nDCG@10 (~7 points above bge-reranker-large); same Qwen3 backbone as embedding upgrade path | Confirmed |
+| Atomic chunking for formulas/tables/code | Never split formula, table, or code block across chunk boundaries; formula chunks enriched with surrounding paragraph text for embedding context | Confirmed |
+| ColFlor visual retrieval deferred to v2 | Text extraction via Docling sufficient for v1; visual retrieval added only if financial tables prove inadequate after validation | Confirmed — v2 |
 
 ---
-*Last updated: 2026-02-12 after initialization*
+*Last updated: 2026-02-18 — technology stack updated after SOTA research*

@@ -1,0 +1,148 @@
+# Roadmap: FellowQuant RAG Server
+
+## Overview
+
+This roadmap delivers a specialized RAG system for quantitative finance research documents. We start by establishing storage infrastructure (Qdrant + SQLite), then build a layout-aware document ingestion pipeline using Docling with atomic chunking that preserves tables and formulas. Next comes the retrieval engine with three-mode hybrid search (BM25 + dense + sparse via BGE-M3 + RRF fusion) and Qwen3-Reranker cross-encoder reranking, followed by local LLM integration via Ollama for answer synthesis. Finally, we expose functionality through a REST API and MCP server for Claude Code integration. Each phase delivers a verifiable capability that enables the next.
+
+**Core technology stack (research-validated 2026-02-18):**
+- **Parser:** Docling (IBM) — 97.9% table accuracy, dedicated VLM for formula→LaTeX; Marker as fast-path fallback
+- **Embedding:** BGE-M3 — unique three-mode output (dense + sparse + multi-vector) enabling full hybrid retrieval
+- **Vector store:** Qdrant (local Docker) — required for BGE-M3 multi-vector and future ColFlor visual retrieval
+- **Reranker:** Qwen3-Reranker-0.6B (Apache 2.0) — ~61 BEIR nDCG@10, Qwen3 stack cohesion
+- **LLM:** Ollama (v1) → vLLM (v2 performance upgrade path)
+- **Hybrid retrieval:** BM25 + BGE-M3 dense + BGE-M3 sparse, fused via Reciprocal Rank Fusion
+
+## Phases
+
+**Phase Numbering:**
+- Integer phases (1, 2, 3): Planned milestone work
+- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
+
+Decimal phases appear between their surrounding integers in numeric order.
+
+- [ ] **Phase 1: Foundation & Storage** - Establish persistent storage for vectors, metadata, and document tracking
+- [ ] **Phase 2: Document Ingestion Pipeline** - Parse PDFs, LaTeX, and notebooks with structure preservation
+- [ ] **Phase 3: Retrieval Engine** - Semantic and hybrid search with citation tracking
+- [ ] **Phase 4: LLM Integration** - Local model serving and answer synthesis
+- [ ] **Phase 5: REST API** - HTTP endpoints for document lifecycle and queries
+- [ ] **Phase 6: MCP Server** - Claude Code integration via MCP protocol
+
+## Phase Details
+
+### Phase 1: Foundation & Storage
+**Goal**: Persistent storage infrastructure for embeddings, metadata, and document tracking is operational
+**Depends on**: Nothing (first phase)
+**Requirements**: STORE-01, STORE-02, STORE-03, STORE-04
+**Stack**: Qdrant (local Docker), SQLite + SQLAlchemy, `./data/` directory layout
+**Success Criteria** (what must be TRUE):
+  1. System can store and retrieve vector embeddings from persistent Qdrant instance (local Docker)
+  2. System can store and query document metadata (title, author, pages, format, hash) in SQLite database
+  3. System can link chunks to source documents via foreign keys with page/section/chunk-type metadata
+  4. System handles 100+ document corpus without performance degradation
+  5. Qdrant collection schema supports multi-vector storage (dense + sparse fields) required by BGE-M3
+**Plans**: TBD
+
+Plans:
+- [ ] TBD
+
+### Phase 2: Document Ingestion Pipeline
+**Goal**: Users can upload PDFs, LaTeX, and Jupyter notebooks with preserved structure (tables, formulas, code)
+**Depends on**: Phase 1
+**Requirements**: INGEST-01, INGEST-02, INGEST-03, INGEST-04, INGEST-05, INGEST-06
+**Stack**: Docling (primary parser, formula VLM, DocLayNet layout), Marker (fast-path fallback), nbformat (notebooks), pylatexenc (LaTeX source), BGE-M3 (FlagEmbedding) for embeddings
+**Chunking strategy**:
+  - Atomic units (never split): formula blocks, table blocks, code blocks — one chunk each
+  - Text blocks: semantic paragraph splitting (256–512 tokens, 64-token overlap)
+  - Formula context enrichment: prepend preceding paragraph to formula chunk's embedding text; store raw LaTeX in display_content
+  - Caption attachment: figure/table captions attached to parent block chunk
+**Success Criteria** (what must be TRUE):
+  1. User uploads a PDF and receives back chunks with intact financial tables (no mangled columns)
+  2. User uploads a LaTeX file and mathematical notation is preserved as LaTeX markup in chunks
+  3. User uploads a Jupyter notebook and code cells remain syntactically complete in chunks
+  4. System never splits a formula or code block across chunk boundaries
+  5. User can query document indexing status and see pending/processing/indexed/failed states
+  6. Formula chunks include surrounding paragraph text in their embedding context
+**Plans**: TBD
+
+Plans:
+- [ ] TBD
+
+### Phase 3: Retrieval Engine
+**Goal**: Users can semantically search documents with hybrid ranking and get back cited chunks
+**Depends on**: Phase 2
+**Requirements**: RETR-01, RETR-02, RETR-03, RETR-04, RETR-05
+**Stack**: BGE-M3 three-mode retrieval (dense + sparse), rank-bm25 for full-text BM25, Reciprocal Rank Fusion for score combination, Qwen3-Reranker-0.6B cross-encoder
+**Retrieval pipeline**:
+  - Stage 1: Parallel retrieval — BM25 keyword search + BGE-M3 dense ANN + BGE-M3 sparse (learned term weights)
+  - Stage 2: RRF fusion with adaptive alpha (exact-term queries favor sparse/BM25; conceptual queries favor dense)
+  - Stage 3: Qwen3-Reranker-0.6B cross-encoder reranking of top-50 candidates → return top-10
+**Success Criteria** (what must be TRUE):
+  1. User queries for a concept and receives semantically relevant chunks ranked by similarity
+  2. User queries with specific terminology and results combine BM25 + dense + sparse hybrid search
+  3. Initial retrieval results are reranked by Qwen3-Reranker-0.6B cross-encoder for improved top-10 precision
+  4. Every returned chunk includes source document name, page number, section heading, and chunk type (text/formula/table/code)
+  5. User can ask comparative queries and receive chunks from multiple documents synthesizing the topic
+**Plans**: TBD
+
+Plans:
+- [ ] TBD
+
+### Phase 4: LLM Integration
+**Goal**: Local LLM generates synthesized answers with inline citations from retrieved chunks
+**Depends on**: Phase 3
+**Requirements**: LLM-01, LLM-02, LLM-03
+**Stack**: Ollama (v1 — simple setup, OpenAI-compatible API); vLLM as v2 upgrade path for throughput
+**Success Criteria** (what must be TRUE):
+  1. System serves a local LLM via Ollama without any cloud API dependencies
+  2. User asks a question and receives a synthesized answer with inline citations (e.g., "[Source: paper.pdf, p.12]")
+  3. LLM responses stream in real-time as they generate
+**Plans**: TBD
+
+Plans:
+- [ ] TBD
+
+### Phase 5: REST API
+**Goal**: Full document lifecycle and query operations exposed via HTTP endpoints
+**Depends on**: Phase 4
+**Requirements**: API-01, API-02, API-03, API-04, API-05, API-06
+**Success Criteria** (what must be TRUE):
+  1. User can POST a document file to ingest endpoint and receive confirmation with document ID
+  2. User can GET list of all documents with metadata and indexing status
+  3. User can DELETE a document by ID and all associated chunks/embeddings are removed
+  4. User can POST to retrieve endpoint with query and receive ranked chunks with citations
+  5. User can POST to ask endpoint with query and receive LLM-synthesized answer with citations
+  6. User can GET status of a specific document by ID to check indexing progress
+**Plans**: TBD
+
+Plans:
+- [ ] TBD
+
+### Phase 6: MCP Server
+**Goal**: Claude Code can manage documents and query knowledge base via MCP protocol
+**Depends on**: Phase 5
+**Requirements**: MCP-01, MCP-02, MCP-03, MCP-04, MCP-05, MCP-06
+**Success Criteria** (what must be TRUE):
+  1. Claude Code discovers MCP server via stdio transport and lists available tools
+  2. Claude Code calls retrieve tool and receives raw chunks with citations
+  3. Claude Code calls ask tool and receives LLM-synthesized answer with citations
+  4. Claude Code calls ingest_document tool and successfully adds file to corpus
+  5. Claude Code calls list_documents tool and sees inventory with indexing status
+  6. Claude Code calls delete_document tool and document is removed from corpus
+**Plans**: TBD
+
+Plans:
+- [ ] TBD
+
+## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Foundation & Storage | 0/TBD | Not started | - |
+| 2. Document Ingestion Pipeline | 0/TBD | Not started | - |
+| 3. Retrieval Engine | 0/TBD | Not started | - |
+| 4. LLM Integration | 0/TBD | Not started | - |
+| 5. REST API | 0/TBD | Not started | - |
+| 6. MCP Server | 0/TBD | Not started | - |
