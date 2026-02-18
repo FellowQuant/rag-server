@@ -40,10 +40,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. System can link chunks to source documents via foreign keys with page/section/chunk-type metadata
   4. System handles 100+ document corpus without performance degradation
   5. Qdrant collection schema supports multi-vector storage (dense + sparse fields) required by BGE-M3
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] TBD
+- [ ] 01-01-PLAN.md — Project scaffold: pyproject.toml, docker-compose.yml, Settings class with DATA_DIR
+- [ ] 01-02-PLAN.md — SQLite layer: async ORM models (Document, Chunk), engine, Alembic migration
+- [ ] 01-03-PLAN.md — Qdrant client wrapper (QdrantStore) and end-to-end storage smoke test
 
 ### Phase 2: Document Ingestion Pipeline
 **Goal**: Users can upload PDFs, LaTeX, and Jupyter notebooks with preserved structure (tables, formulas, code)
@@ -140,7 +142,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation & Storage | 0/TBD | Not started | - |
+| 1. Foundation & Storage | 0/3 | Not started | - |
 | 2. Document Ingestion Pipeline | 0/TBD | Not started | - |
 | 3. Retrieval Engine | 0/TBD | Not started | - |
 | 4. LLM Integration | 0/TBD | Not started | - |
