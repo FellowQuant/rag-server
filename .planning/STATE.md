@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 ## Current Position
 
 Phase: 4 of 6 (LLM Integration)
-Plan: 1 of 4 (04-01 complete)
-Status: Phase 4 in progress (1/4 plans complete)
-Last activity: 2026-02-19 — 04-01-PLAN.md complete (YAML-driven LLM provider abstraction: LLMSettings, LLMProvider ABC, create_provider(), AskRequest/AskResponse schemas)
+Plan: 2 of 4 (04-02 complete)
+Status: Phase 4 in progress (2/4 plans complete)
+Last activity: 2026-02-19 — 04-02-PLAN.md complete (Three concrete LLM providers: VLLMProvider, LlamaCppProvider via AsyncOpenAI, BedrockProvider via boto3 Converse API wrapped in asyncio.to_thread)
 
-Progress: [██████████] 72% (13 of 18 plans complete)
+Progress: [██████████] 78% (14 of 18 plans complete)
 
 ## Performance Metrics
 
@@ -91,6 +91,10 @@ Recent decisions affecting current work:
 - [Phase 04-llm-integration]: YamlConfigSettingsSource as sole pydantic-settings source for LLMSettings — no env var merging; clean separation between app config and LLM config
 - [Phase 04-llm-integration]: Lazy imports in create_provider() — delays openai/boto3 SDK initialization until provider actually constructed
 - [Phase 04-llm-integration]: LLMProvider ABC uses OpenAI role/content message format as canonical — concrete providers convert internally (BedrockProvider maps to Converse API format)
+- [Phase 04-llm-integration]: AsyncOpenAI client created once at VLLMProvider/LlamaCppProvider init — httpx manages connection pool; creating per-request would be wasteful
+- [Phase 04-llm-integration]: boto3 client created fresh per BedrockProvider call (not stored on self) — boto3 clients are NOT thread-safe when shared across threads in asyncio.to_thread
+- [Phase 04-llm-integration]: Bedrock streaming is batch-then-yield — ConverseStream event iteration is synchronous, runs entirely inside asyncio.to_thread; tokens arrive all at once after model finishes (acceptable for cloud fallback)
+- [Phase 04-llm-integration]: LlamaCppProvider is a separate class from VLLMProvider despite identical implementation — explicit class for logs, future parameter divergence (n_predict, grammar), and factory clarity
 - [Phase 03-retrieval-engine]: Chunk content fetched from SQLite via bulk JOIN after RRF, before reranker — content lives only in SQLite, never in Qdrant payload
 
 ### Pending Todos
@@ -108,5 +112,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 04-01-PLAN.md — YAML-driven LLM provider abstraction: LLMSettings, LLMProvider ABC, create_provider(), AskRequest/AskResponse schemas.
+Stopped at: Completed 04-02-PLAN.md — Three concrete LLM providers: VLLMProvider, LlamaCppProvider via AsyncOpenAI, BedrockProvider via boto3 Converse API wrapped in asyncio.to_thread.
 Resume file: None
