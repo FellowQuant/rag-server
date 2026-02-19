@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 ## Current Position
 
 Phase: 5 of 6 (REST API)
-Plan: 2 of 2 (05-02 complete — Phase 5 DONE)
-Status: Phase 5 complete (2/2 plans complete) — ready for Phase 6
-Last activity: 2026-02-19 — 05-02-PLAN.md complete (POST /api/v1/retrieve, document_ids scoping, retrieve schemas, QdrantStore query_filter)
+Plan: 3 of 3 (05-03 complete — Phase 5 DONE)
+Status: Phase 5 complete (3/3 plans complete) — ready for Phase 6
+Last activity: 2026-02-19 — 05-03-PLAN.md complete (Phase 5 API end-to-end verification script, 13 checks covering API-01 through API-06)
 
 Progress: [██████████] 100% (18 of 18 plans complete)
 
@@ -39,6 +39,7 @@ Progress: [██████████] 100% (18 of 18 plans complete)
 *Updated after each plan completion*
 
 | Phase 05-rest-api P02 | 2 | 2 tasks | 5 files |
+| Phase 05-rest-api P03 | 1 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -112,6 +113,9 @@ Recent decisions affecting current work:
 - [Phase 05-rest-api]: query_filter=None default on QdrantStore methods — Qdrant ignores None natively, no branching needed in query_dense/query_sparse
 - [Phase 05-rest-api]: document_ids=None default on RetrievalEngine.search() — /ask endpoint remains fully backward compatible
 - [Phase 05-rest-api]: BM25 post-filter after asyncio.gather — BM25 corpus is global, manual post-filter required since Qdrant payload filter cannot apply to keyword search
+- [Phase 05-rest-api]: BASE_URL configurable via env var (default localhost:8001) for verify_api.py smoke test
+- [Phase 05-rest-api]: ChunkResultItem shape check skips gracefully when corpus empty — valid server state on fresh install
+- [Phase 05-rest-api]: POST /api/v1/ask accepts 200 or 500 as endpoint-present — 500 means LLM unavailable, not missing route
 
 ### Pending Todos
 
@@ -128,5 +132,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 05-02-PLAN.md — POST /api/v1/retrieve, document_ids scoping for retrieval, QdrantStore query_filter, Phase 5 REST API complete.
+Stopped at: Completed 05-03-PLAN.md — Phase 5 API verification script (scripts/verify_api.py, 13 checks, API-01 through API-06). Phase 5 REST API fully complete (3/3 plans).
 Resume file: None
