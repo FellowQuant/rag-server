@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Core value:** Accurate retrieval and synthesis from dense quantitative finance documents — tables stay as tables, formulas stay as formulas, and citations trace back to exact sources.
-**Current focus:** Phase 6 - MCP Server (1 of 2 plans complete)
+**Current focus:** Phase 6 - MCP Server (COMPLETE — 2/2 plans done)
 
 ## Current Position
 
 Phase: 6 of 6 (MCP Server)
-Plan: 1 of 2 (06-01 complete)
-Status: Phase 6 in progress (1/2 plans complete)
-Last activity: 2026-02-19 — 06-01-PLAN.md complete (FastMCP server with lifespan, retrieve and ask tools)
+Plan: 2 of 2 (06-02 complete — ALL PLANS DONE)
+Status: Phase 6 complete (2/2 plans complete) — PROJECT COMPLETE
+Last activity: 2026-02-19 — 06-02-PLAN.md complete (document management tools + .mcp.json)
 
-Progress: [██████████] 100% (19 of 20 plans complete)
+Progress: [██████████] 100% (20 of 20 plans complete)
 
 ## Performance Metrics
 
@@ -40,6 +40,7 @@ Progress: [██████████] 100% (19 of 20 plans complete)
 
 | Phase 05-rest-api P02 | 2 | 2 tasks | 5 files |
 | Phase 05-rest-api P03 | 1 | 1 tasks | 1 files |
+| Phase 06-mcp-server P02 | 1 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -120,6 +121,9 @@ Recent decisions affecting current work:
 - [Phase 06-mcp-server]: BM25 loaded from disk only on MCP start (no rebuild) — stale BM25 acceptable; restart server after indexing new documents
 - [Phase 06-mcp-server]: No WorkerManager in MCP lifespan — MCP server is query-only; ingestion happens exclusively via FastAPI
 - [Phase 06-mcp-server]: LLM failure in ask tool falls back to answer=null + raw sources + note (not ToolError) — partial results more useful than error for Claude Code
+- [Phase 06-mcp-server]: NOT_FOUND error format: ToolError('NOT_FOUND: <id>') — short uppercase machine-readable code prefix, consistent with QDRANT_UNAVAILABLE and INVALID_PARAM patterns established in 06-01
+- [Phase 06-mcp-server]: delete_document ordering matches REST API: disk unlink → SQLite commit → Qdrant (non-fatal) — SQLite is authoritative; Qdrant orphan vectors invisible without SQLite record
+- [Phase 06-mcp-server]: env:{} in .mcp.json intentional — Claude Code inherits parent shell environment; DATA_DIR, QDRANT_URL etc need not be listed explicitly
 
 ### Pending Todos
 
@@ -136,5 +140,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 06-01-PLAN.md — FastMCP server with lifespan, retrieve and ask tools (src/rag_server/mcp_server.py). Phase 6 MCP Server 1/2 plans complete.
+Stopped at: Completed 06-02-PLAN.md — Document management tools (list_documents, get_document, delete_document) + .mcp.json for Claude Code discovery. Phase 6 MCP Server 2/2 plans complete. PROJECT COMPLETE.
 Resume file: None

@@ -25,7 +25,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Retrieval Engine** - Semantic and hybrid search with citation tracking (completed 2026-02-19)
 - [ ] **Phase 4: LLM Integration** - Local model serving and answer synthesis
 - [x] **Phase 5: REST API** - HTTP endpoints for document lifecycle and queries (completed 2026-02-19)
-- [ ] **Phase 6: MCP Server** - Claude Code integration via MCP protocol
+- [x] **Phase 6: MCP Server** - Claude Code integration via MCP protocol (completed 2026-02-19)
 
 ## Phase Details
 
@@ -158,4 +158,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Retrieval Engine | 4/4 | Complete   | 2026-02-19 |
 | 4. LLM Integration | 3/4 | In Progress|  |
 | 5. REST API | 3/3 | Complete   | 2026-02-19 |
-| 6. MCP Server | 1/2 | In Progress|  |
+| 6. MCP Server | 2/2 | Complete   | 2026-02-19 |
