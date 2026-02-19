@@ -30,10 +30,11 @@ class Document(Base):
     file_hash: Mapped[str] = mapped_column(String, nullable=False, unique=True)  # SHA-256
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)   # bytes
     status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
-    # status values: pending | indexing | indexed | failed
+    # status values: pending | indexing | indexed | indexed_partial | failed
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
     error_msg: Mapped[str | None] = mapped_column(Text, nullable=True)
+    indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     chunks: Mapped[list["Chunk"]] = relationship(
         "Chunk", back_populates="document", cascade="all, delete-orphan"
