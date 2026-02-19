@@ -2,14 +2,14 @@
 
 ## Overview
 
-This roadmap delivers a specialized RAG system for quantitative finance research documents. We start by establishing storage infrastructure (Qdrant + SQLite), then build a layout-aware document ingestion pipeline using Docling with atomic chunking that preserves tables and formulas. Next comes the retrieval engine with three-mode hybrid search (BM25 + dense + sparse via BGE-M3 + RRF fusion) and Qwen3-Reranker cross-encoder reranking, followed by local LLM integration via Ollama for answer synthesis. Finally, we expose functionality through a REST API and MCP server for Claude Code integration. Each phase delivers a verifiable capability that enables the next.
+This roadmap delivers a specialized RAG system for quantitative finance research documents. We start by establishing storage infrastructure (Qdrant + SQLite), then build a layout-aware document ingestion pipeline using Docling with atomic chunking that preserves tables and formulas. Next comes the retrieval engine with three-mode hybrid search (BM25 + dense + sparse via BGE-M3 + RRF fusion) and Qwen3-Reranker cross-encoder reranking, followed by local LLM integration via vLLM, llama.cpp, and AWS Bedrock for answer synthesis. Finally, we expose functionality through a REST API and MCP server for Claude Code integration. Each phase delivers a verifiable capability that enables the next.
 
 **Core technology stack (research-validated 2026-02-18):**
 - **Parser:** Docling (IBM) — 97.9% table accuracy, dedicated VLM for formula→LaTeX; Marker as fast-path fallback
 - **Embedding:** BGE-M3 — unique three-mode output (dense + sparse + multi-vector) enabling full hybrid retrieval
 - **Vector store:** Qdrant (local Docker) — required for BGE-M3 multi-vector and future ColFlor visual retrieval
 - **Reranker:** Qwen3-Reranker-0.6B (Apache 2.0) — ~61 BEIR nDCG@10, Qwen3 stack cohesion
-- **LLM:** Ollama (v1) → vLLM (v2 performance upgrade path)
+- **LLM:** vLLM (local GPU, OpenAI-compatible) | llama.cpp (local CPU/GGUF) | AWS Bedrock (cloud fallback) — provider-swappable via llm.yaml
 - **Hybrid retrieval:** BM25 + BGE-M3 dense + BGE-M3 sparse, fused via Reciprocal Rank Fusion
 
 ## Phases
@@ -91,22 +91,25 @@ Plans:
 Plans:
 - [x] 03-01-PLAN.md — Qdrant v1.16.3 upgrade + encode_query() on Embedder + query_dense()/query_sparse() on QdrantStore
 - [x] 03-02-PLAN.md — BM25Manager (build/search/persist/hot-swap) + WorkerManager result_queue + FastAPI BM25 poll task
-- [ ] 03-03-PLAN.md — Qwen3-Reranker-0.6B wrapper (AutoModelForCausalLM, yes/no logit extraction, padding_side=left)
-- [ ] 03-04-PLAN.md — RetrievalEngine (three-leg RRF + reranker) + result dataclasses + lifespan wiring + smoke test
+- [x] 03-03-PLAN.md — Qwen3-Reranker-0.6B wrapper (AutoModelForCausalLM, yes/no logit extraction, padding_side=left)
+- [x] 03-04-PLAN.md — RetrievalEngine (three-leg RRF + reranker) + result dataclasses + lifespan wiring + smoke test
 
 ### Phase 4: LLM Integration
 **Goal**: Local LLM generates synthesized answers with inline citations from retrieved chunks
 **Depends on**: Phase 3
 **Requirements**: LLM-01, LLM-02, LLM-03
-**Stack**: Ollama (v1 — simple setup, OpenAI-compatible API); vLLM as v2 upgrade path for throughput
+**Stack**: vLLM (local GPU, OpenAI-compatible) | llama.cpp (local CPU/GGUF, OpenAI-compatible) | AWS Bedrock (cloud fallback via boto3 standard credential chain) — provider selected via llm.yaml
 **Success Criteria** (what must be TRUE):
-  1. System serves a local LLM via Ollama without any cloud API dependencies
+  1. System serves a local LLM (vLLM or llama.cpp) or cloud (AWS Bedrock) without hardcoded cloud API keys
   2. User asks a question and receives a synthesized answer with inline citations (e.g., "[Source: paper.pdf, p.12]")
-  3. LLM responses stream in real-time as they generate
-**Plans**: TBD
+  3. LLM responses stream in real-time as they generate (SSE token events + done event with {answer, sources})
+**Plans**: 4 plans
 
 Plans:
-- [ ] TBD
+- [ ] 04-01-PLAN.md — Dependencies (openai, boto3, sse-starlette, tenacity, pyyaml) + llm.yaml config + LLMSettings + LLMProvider ABC + API schemas
+- [ ] 04-02-PLAN.md — Concrete providers: VLLMProvider + LlamaCppProvider (AsyncOpenAI) + BedrockProvider (boto3 + asyncio.to_thread)
+- [ ] 04-03-PLAN.md — SynthesisEngine: prompt assembly, token budget (tiktoken), citation parsing (lenient regex), tenacity retry
+- [ ] 04-04-PLAN.md — POST /ask endpoint (SSE streaming + non-streaming) + lifespan wiring + smoke test
 
 ### Phase 5: REST API
 **Goal**: Full document lifecycle and query operations exposed via HTTP endpoints
@@ -150,6 +153,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Foundation & Storage | 3/3 | Complete    | 2026-02-18 |
 | 2. Document Ingestion Pipeline | 4/4 | Complete   | 2026-02-19 |
 | 3. Retrieval Engine | 4/4 | Complete   | 2026-02-19 |
-| 4. LLM Integration | 0/TBD | Not started | - |
+| 4. LLM Integration | 0/4 | Not started | - |
 | 5. REST API | 0/TBD | Not started | - |
 | 6. MCP Server | 0/TBD | Not started | - |
