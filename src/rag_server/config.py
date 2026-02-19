@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     qdrant_port: int = 6333
     qdrant_collection: str = "documents"
 
+    max_upload_size: int = Field(default=100 * 1024 * 1024)  # 100MB; set MAX_UPLOAD_SIZE env var to override
+
     @property
     def qdrant_url(self) -> str:
         return f"http://{self.qdrant_host}:{self.qdrant_port}"
