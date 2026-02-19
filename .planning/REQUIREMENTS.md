@@ -33,8 +33,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### LLM Integration
 
-- [ ] **LLM-01**: System serves a local LLM (via Ollama or vLLM) for answer generation without cloud API dependencies
-- [ ] **LLM-02**: System generates answers from retrieved chunks with inline citations referencing source documents and pages
+- [x] **LLM-01**: System serves a local LLM (via Ollama or vLLM) for answer generation without cloud API dependencies
+- [x] **LLM-02**: System generates answers from retrieved chunks with inline citations referencing source documents and pages
 - [ ] **LLM-03**: System supports streaming LLM responses as they generate for real-time output
 
 ### REST API
@@ -113,8 +113,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RETR-03 | Phase 3 | Complete |
 | RETR-04 | Phase 3 | Complete |
 | RETR-05 | Phase 3 | Complete |
-| LLM-01 | Phase 4 | Pending |
-| LLM-02 | Phase 4 | Pending |
+| LLM-01 | Phase 4 | Complete |
+| LLM-02 | Phase 4 | Complete |
 | LLM-03 | Phase 4 | Pending |
 | API-01 | Phase 5 | Pending |
 | API-02 | Phase 5 | Pending |

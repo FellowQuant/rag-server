@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 ## Current Position
 
-Phase: 3 of 6 (Retrieval API)
-Plan: 4 of 4 (03-04 complete; Phase 3 COMPLETE)
-Status: Phase 3 complete (4/4 plans complete)
-Last activity: 2026-02-19 — 03-04-PLAN.md complete (RetrievalEngine three-leg hybrid retrieval + RRF + Qwen3 reranking, wired into FastAPI lifespan)
+Phase: 4 of 6 (LLM Integration)
+Plan: 1 of 4 (04-01 complete)
+Status: Phase 4 in progress (1/4 plans complete)
+Last activity: 2026-02-19 — 04-01-PLAN.md complete (YAML-driven LLM provider abstraction: LLMSettings, LLMProvider ABC, create_provider(), AskRequest/AskResponse schemas)
 
-Progress: [██████████] 67% (12 of 18 plans complete)
+Progress: [██████████] 72% (13 of 18 plans complete)
 
 ## Performance Metrics
 
@@ -87,6 +87,10 @@ Recent decisions affecting current work:
 - [Phase 03-retrieval-engine]: Separate query-side Embedder instance in FastAPI process — worker Embedder lives in spawned subprocess; FastAPI needs its own for encode_query() at request time
 - [Phase 03-retrieval-engine]: min_score filter applied before top_k cutoff — ensures final slice is always highest-quality results above threshold
 - [Phase 03-retrieval-engine]: ordered_ids filters to only chunk_ids present in chunk_rows — handles edge case where Qdrant has IDs not yet in SQLite
+- [Phase 04-llm-integration]: llm.yaml separate from .env — LLM config changes frequently and YAML is human-friendly for multi-line system prompts; no secrets in llm.yaml
+- [Phase 04-llm-integration]: YamlConfigSettingsSource as sole pydantic-settings source for LLMSettings — no env var merging; clean separation between app config and LLM config
+- [Phase 04-llm-integration]: Lazy imports in create_provider() — delays openai/boto3 SDK initialization until provider actually constructed
+- [Phase 04-llm-integration]: LLMProvider ABC uses OpenAI role/content message format as canonical — concrete providers convert internally (BedrockProvider maps to Converse API format)
 - [Phase 03-retrieval-engine]: Chunk content fetched from SQLite via bulk JOIN after RRF, before reranker — content lives only in SQLite, never in Qdrant payload
 
 ### Pending Todos
@@ -104,5 +108,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 03-04-PLAN.md — RetrievalEngine three-leg hybrid retrieval + RRF + Qwen3 reranking, wired into FastAPI lifespan. Phase 3 complete.
+Stopped at: Completed 04-01-PLAN.md — YAML-driven LLM provider abstraction: LLMSettings, LLMProvider ABC, create_provider(), AskRequest/AskResponse schemas.
 Resume file: None
