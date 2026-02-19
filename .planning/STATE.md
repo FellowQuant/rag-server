@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 ## Current Position
 
 Phase: 3 of 6 (Retrieval API)
-Plan: 2 of 4 (03-01 complete; 03-02 next)
-Status: Phase 3 in progress (1/4 plans complete)
-Last activity: 2026-02-19 — 03-01-PLAN.md complete (Qdrant upgraded to v1.16.3, query embedding and search methods added)
+Plan: 3 of 4 (03-02 complete; 03-03 next)
+Status: Phase 3 in progress (2/4 plans complete)
+Last activity: 2026-02-19 — 03-02-PLAN.md complete (BM25Manager, result_queue IPC, FastAPI _poll_bm25_updates background task)
 
-Progress: [████████░░] 50% (9 of 18 plans complete)
+Progress: [█████████░] 56% (10 of 18 plans complete)
 
 ## Performance Metrics
 
@@ -29,7 +29,7 @@ Progress: [████████░░] 50% (9 of 18 plans complete)
 |-------|-------|-------|----------|
 | 1. Foundation & Storage | 3/3 complete | 28 min | 9 min |
 | 2. Document Ingestion Pipeline | 4/4 complete | 11 min | 3 min |
-| 3. Retrieval Engine | 1/4 complete | 3 min | 3 min |
+| 3. Retrieval Engine | 2/4 complete | 6 min | 3 min |
 
 **Recent Trend:**
 - Last 5 plans: 02-02 (2 min), 02-03 (4 min), 02-04 (3 min), 03-01 (3 min)
@@ -76,6 +76,10 @@ Recent decisions affecting current work:
 - [Phase 03-retrieval-engine]: encode_queries() used for query embedding (not encode()) — BGE-M3 applies query_max_length and query_instruction for retrieval queries
 - [Phase 03-retrieval-engine]: query_sparse() returns [] on empty indices — Qdrant server errors on empty SparseVector; early return is safer
 - [Phase 03-retrieval-engine]: query_points() API used (not legacy search()) — modern unified API in qdrant-client 1.16
+- [Phase 03-retrieval-engine]: BM25 corpus is global (all indexed chunks) — required for cross-document retrieval
+- [Phase 03-retrieval-engine]: asyncio.Lock held only during BM25 reference swap, not during search — GIL makes Python reference assignment atomic
+- [Phase 03-retrieval-engine]: result_queue.put_nowait() sent for both "indexed" and "indexed_partial" — both have chunks in SQLite
+- [Phase 03-retrieval-engine]: BM25 poll task uses asyncio.to_thread(queue.get_nowait) + asyncio.sleep(0.5) on empty to avoid blocking event loop
 
 ### Pending Todos
 
@@ -92,5 +96,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 03-01-PLAN.md — Qdrant v1.16.3 upgrade, encode_query(), query_dense(), query_sparse()
+Stopped at: Completed 03-02-PLAN.md — BM25Manager, result_queue IPC, FastAPI _poll_bm25_updates background task
 Resume file: None
