@@ -86,10 +86,13 @@ Plans:
   3. Initial retrieval results are reranked by Qwen3-Reranker-0.6B cross-encoder for improved top-10 precision
   4. Every returned chunk includes source document name, page number, section heading, and chunk type (text/formula/table/code)
   5. User can ask comparative queries and receive chunks from multiple documents synthesizing the topic
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] TBD
+- [ ] 03-01-PLAN.md — Qdrant v1.16.3 upgrade + encode_query() on Embedder + query_dense()/query_sparse() on QdrantStore
+- [ ] 03-02-PLAN.md — BM25Manager (build/search/persist/hot-swap) + WorkerManager result_queue + FastAPI BM25 poll task
+- [ ] 03-03-PLAN.md — Qwen3-Reranker-0.6B wrapper (AutoModelForCausalLM, yes/no logit extraction, padding_side=left)
+- [ ] 03-04-PLAN.md — RetrievalEngine (three-leg RRF + reranker) + result dataclasses + lifespan wiring + smoke test
 
 ### Phase 4: LLM Integration
 **Goal**: Local LLM generates synthesized answers with inline citations from retrieved chunks
@@ -146,7 +149,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. Foundation & Storage | 3/3 | Complete    | 2026-02-18 |
 | 2. Document Ingestion Pipeline | 4/4 | Complete   | 2026-02-19 |
-| 3. Retrieval Engine | 0/TBD | Not started | - |
+| 3. Retrieval Engine | 0/4 | Not started | - |
 | 4. LLM Integration | 0/TBD | Not started | - |
 | 5. REST API | 0/TBD | Not started | - |
 | 6. MCP Server | 0/TBD | Not started | - |
