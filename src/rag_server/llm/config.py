@@ -95,8 +95,9 @@ class LLMSettings(BaseSettings):
         settings_cls: type[BaseSettings],
         **kwargs,
     ):
-        # Only source: llm.yaml at the project root (next to pyproject.toml)
-        yaml_path = Path("llm.yaml")
+        # llm.yaml lives at the project root (next to pyproject.toml).
+        # Resolve relative to this file's location: src/rag_server/llm/config.py → ../../..
+        yaml_path = Path(__file__).parent.parent.parent.parent / "llm.yaml"
         return (YamlConfigSettingsSource(settings_cls, yaml_file=yaml_path),)
 
 
