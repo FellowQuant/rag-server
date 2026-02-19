@@ -132,14 +132,14 @@ Plans:
 ### Phase 6: MCP Server
 **Goal**: Claude Code can manage documents and query knowledge base via MCP protocol
 **Depends on**: Phase 5
-**Requirements**: MCP-01, MCP-02, MCP-03, MCP-04, MCP-05, MCP-06
+**Requirements**: MCP-01, MCP-02, MCP-03, MCP-05, MCP-06
+**Note**: MCP-04 (ingest_document tool) excluded by user decision — file upload is a manual REST API operation
 **Success Criteria** (what must be TRUE):
   1. Claude Code discovers MCP server via stdio transport and lists available tools
   2. Claude Code calls retrieve tool and receives raw chunks with citations
   3. Claude Code calls ask tool and receives LLM-synthesized answer with citations
-  4. Claude Code calls ingest_document tool and successfully adds file to corpus
-  5. Claude Code calls list_documents tool and sees inventory with indexing status
-  6. Claude Code calls delete_document tool and document is removed from corpus
+  4. Claude Code calls list_documents tool and sees inventory with indexing status
+  5. Claude Code calls delete_document tool and document is removed from corpus
 **Plans**: 2 plans
 
 Plans:
