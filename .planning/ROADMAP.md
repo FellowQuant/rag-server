@@ -51,23 +51,25 @@ Plans:
 **Goal**: Users can upload PDFs, LaTeX, and Jupyter notebooks with preserved structure (tables, formulas, code)
 **Depends on**: Phase 1
 **Requirements**: INGEST-01, INGEST-02, INGEST-03, INGEST-04, INGEST-05, INGEST-06
-**Stack**: Docling (primary parser, formula VLM, DocLayNet layout), Marker (fast-path fallback), nbformat (notebooks), pylatexenc (LaTeX source), BGE-M3 (FlagEmbedding) for embeddings
+**Stack**: Docling (primary parser, formula VLM, DocLayNet layout), nbformat (notebooks), pylatexenc (LaTeX source), BGE-M3 (FlagEmbedding) for embeddings
 **Chunking strategy**:
   - Atomic units (never split): formula blocks, table blocks, code blocks — one chunk each
   - Text blocks: semantic paragraph splitting (256–512 tokens, 64-token overlap)
   - Formula context enrichment: prepend preceding paragraph to formula chunk's embedding text; store raw LaTeX in display_content
-  - Caption attachment: figure/table captions attached to parent block chunk
 **Success Criteria** (what must be TRUE):
   1. User uploads a PDF and receives back chunks with intact financial tables (no mangled columns)
   2. User uploads a LaTeX file and mathematical notation is preserved as LaTeX markup in chunks
   3. User uploads a Jupyter notebook and code cells remain syntactically complete in chunks
   4. System never splits a formula or code block across chunk boundaries
-  5. User can query document indexing status and see pending/processing/indexed/failed states
+  5. User can query document indexing status and see pending/indexing/indexed/failed states
   6. Formula chunks include surrounding paragraph text in their embedding context
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] TBD
+- [ ] 02-01-PLAN.md — Parsers & chunker: Docling PDF parser, pylatexenc LaTeX parser, nbformat Jupyter parser, ParsedChunk dataclass
+- [ ] 02-02-PLAN.md — BGE-M3 embedder: Embedder class with load/unload/embed_chunks, EmbeddingResult with dense+sparse vectors
+- [ ] 02-03-PLAN.md — Worker process: pipeline (parse→embed→SQLite→Qdrant with rollback), process entry point, WorkerManager lifecycle
+- [ ] 02-04-PLAN.md — Ingestion API: POST/GET/LIST/DELETE /documents endpoints, FastAPI lifespan, integration smoke test
 
 ### Phase 3: Retrieval Engine
 **Goal**: Users can semantically search documents with hybrid ranking and get back cited chunks
@@ -143,7 +145,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Storage | 3/3 | Complete    | 2026-02-18 |
-| 2. Document Ingestion Pipeline | 0/TBD | Not started | - |
+| 2. Document Ingestion Pipeline | 0/4 | Not started | - |
 | 3. Retrieval Engine | 0/TBD | Not started | - |
 | 4. LLM Integration | 0/TBD | Not started | - |
 | 5. REST API | 0/TBD | Not started | - |
