@@ -35,16 +35,16 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **LLM-01**: System serves a local LLM (via Ollama or vLLM) for answer generation without cloud API dependencies
 - [x] **LLM-02**: System generates answers from retrieved chunks with inline citations referencing source documents and pages
-- [ ] **LLM-03**: System supports streaming LLM responses as they generate for real-time output
+- [x] **LLM-03**: System supports streaming LLM responses as they generate for real-time output
 
 ### REST API
 
-- [ ] **API-01**: User can ingest documents via POST endpoint with file upload
-- [ ] **API-02**: User can list all documents with metadata and indexing status via GET endpoint
-- [ ] **API-03**: User can delete documents and their associated chunks/embeddings via DELETE endpoint
+- [x] **API-01**: User can ingest documents via POST endpoint with file upload
+- [x] **API-02**: User can list all documents with metadata and indexing status via GET endpoint
+- [x] **API-03**: User can delete documents and their associated chunks/embeddings via DELETE endpoint
 - [ ] **API-04**: User can query the knowledge base via retrieve endpoint returning ranked chunks with citations
-- [ ] **API-05**: User can query the knowledge base via ask endpoint returning LLM-synthesized answers with citations
-- [ ] **API-06**: User can check document indexing status via status endpoint
+- [x] **API-05**: User can query the knowledge base via ask endpoint returning LLM-synthesized answers with citations
+- [x] **API-06**: User can check document indexing status via status endpoint
 
 ### MCP Server
 
@@ -115,13 +115,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RETR-05 | Phase 3 | Complete |
 | LLM-01 | Phase 4 | Complete |
 | LLM-02 | Phase 4 | Complete |
-| LLM-03 | Phase 4 | Pending |
-| API-01 | Phase 5 | Pending |
-| API-02 | Phase 5 | Pending |
-| API-03 | Phase 5 | Pending |
+| LLM-03 | Phase 4 | Complete |
+| API-01 | Phase 5 | Complete |
+| API-02 | Phase 5 | Complete |
+| API-03 | Phase 5 | Complete |
 | API-04 | Phase 5 | Pending |
-| API-05 | Phase 5 | Pending |
-| API-06 | Phase 5 | Pending |
+| API-05 | Phase 5 | Complete |
+| API-06 | Phase 5 | Complete |
 | MCP-01 | Phase 6 | Pending |
 | MCP-02 | Phase 6 | Pending |
 | MCP-03 | Phase 6 | Pending |

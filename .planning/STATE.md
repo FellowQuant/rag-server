@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 
 ## Current Position
 
-Phase: 4 of 6 (LLM Integration)
-Plan: 4 of 4 (04-04 complete — Phase 4 complete)
-Status: Phase 4 complete (4/4 plans complete)
-Last activity: 2026-02-19 — 04-04-PLAN.md complete (POST /ask endpoint with SSE streaming, SynthesisEngine lifespan wiring, verify_llm.py smoke test)
+Phase: 5 of 6 (REST API)
+Plan: 1 of 2 (05-01 complete)
+Status: Phase 5 in progress (1/2 plans complete)
+Last activity: 2026-02-19 — 05-01-PLAN.md complete (URL versioning /api/v1, CORS/Logging/UploadSizeLimit middleware stack, RFC 7807 error handlers, version 0.5.0)
 
-Progress: [██████████] 89% (16 of 18 plans complete)
+Progress: [██████████] 94% (17 of 18 plans complete)
 
 ## Performance Metrics
 
@@ -103,6 +103,10 @@ Recent decisions affecting current work:
 - [Phase 04-llm-integration]: parse_result() fallback includes all input chunks as sources when 0 citations found — never return empty sources when answer exists
 - [Phase 04-llm-integration]: response_model=None on POST /ask — FastAPI cannot infer Pydantic response model from AskResponse | EventSourceResponse union type
 - [Phase 04-llm-integration]: streaming=True is default query param on POST /ask — users get SSE by default, opt-in to non-streaming with streaming=false
+- [Phase 05-rest-api]: CORS middleware registered last via LIFO add_middleware() — executes first at runtime, outermost layer handles preflight
+- [Phase 05-rest-api]: UploadSizeLimitMiddleware reads Content-Length header only, not body — rejects oversized uploads pre-read for memory efficiency
+- [Phase 05-rest-api]: LoggingMiddleware never consumes response body — SSE streaming passes through unmodified
+- [Phase 05-rest-api]: type(m).__name__ on app.user_middleware returns 'Middleware' (Starlette namedtuple); actual class accessible via m.cls.__name__
 
 ### Pending Todos
 
@@ -119,5 +123,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 04-04-PLAN.md — POST /ask endpoint with SSE streaming, SynthesisEngine lifespan wiring, verify_llm.py smoke test. Phase 4 LLM Integration complete.
+Stopped at: Completed 05-01-PLAN.md — URL versioning /api/v1, CORS/Logging/UploadSizeLimit middleware, RFC 7807 error handlers, version 0.5.0.
 Resume file: None
