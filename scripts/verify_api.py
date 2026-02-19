@@ -83,7 +83,12 @@ def main() -> int:
             # ------------------------------------------------------------------
             # 4. CORS header on /api/v1/documents (API-03)
             # ------------------------------------------------------------------
-            r = client.get(f"{BASE_URL}/api/v1/documents")
+            # CORS middleware only adds Access-Control-Allow-Origin when the
+            # request includes an Origin header (simulating a browser cross-origin call).
+            r = client.get(
+                f"{BASE_URL}/api/v1/documents",
+                headers={"Origin": "http://localhost:3000"},
+            )
             cors_ok = (
                 r.status_code == 200
                 and r.headers.get("access-control-allow-origin") == "*"
