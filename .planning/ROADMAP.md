@@ -140,10 +140,11 @@ Plans:
   4. Claude Code calls ingest_document tool and successfully adds file to corpus
   5. Claude Code calls list_documents tool and sees inventory with indexing status
   6. Claude Code calls delete_document tool and document is removed from corpus
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] TBD
+- [ ] 06-01-PLAN.md — MCP server skeleton + retrieve and ask query tools (Wave 1)
+- [ ] 06-02-PLAN.md — list_documents, get_document, delete_document tools + .mcp.json discovery (Wave 2)
 
 ## Progress
 
