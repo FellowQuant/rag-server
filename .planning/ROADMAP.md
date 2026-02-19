@@ -21,7 +21,7 @@ This roadmap delivers a specialized RAG system for quantitative finance research
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation & Storage** - Establish persistent storage for vectors, metadata, and document tracking
-- [ ] **Phase 2: Document Ingestion Pipeline** - Parse PDFs, LaTeX, and notebooks with structure preservation
+- [x] **Phase 2: Document Ingestion Pipeline** - Parse PDFs, LaTeX, and notebooks with structure preservation (completed 2026-02-19)
 - [ ] **Phase 3: Retrieval Engine** - Semantic and hybrid search with citation tracking
 - [ ] **Phase 4: LLM Integration** - Local model serving and answer synthesis
 - [ ] **Phase 5: REST API** - HTTP endpoints for document lifecycle and queries
@@ -145,7 +145,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Storage | 3/3 | Complete    | 2026-02-18 |
-| 2. Document Ingestion Pipeline | 0/4 | Not started | - |
+| 2. Document Ingestion Pipeline | 4/4 | Complete   | 2026-02-19 |
 | 3. Retrieval Engine | 0/TBD | Not started | - |
 | 4. LLM Integration | 0/TBD | Not started | - |
 | 5. REST API | 0/TBD | Not started | - |

@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 ## Current Position
 
 Phase: 2 of 6 (Document Ingestion Pipeline)
-Plan: 3 of 4 (02-03-PLAN.md — worker infrastructure) — COMPLETE
-Status: Phase 2 in progress (3/4 plans complete)
-Last activity: 2026-02-19 — 02-03-PLAN.md complete
+Plan: 4 of 4 (02-04-PLAN.md — REST API layer) — awaiting checkpoint:human-verify
+Status: Phase 2 in progress (4/4 auto tasks complete, checkpoint pending)
+Last activity: 2026-02-19 — 02-04-PLAN.md tasks complete, checkpoint pending
 
-Progress: [██████░░░░] 33% (6 of 18 plans complete)
+Progress: [███████░░░] 38% (7 of 18 plans — tasks complete, checkpoint pending)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 9 min
-- Total execution time: 0.45 hours
+- Total plans completed: 4 (02-04 checkpoint pending)
+- Average duration: 8 min
+- Total execution time: 0.5 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1. Foundation & Storage | 3/3 complete | 28 min | 9 min |
-| 2. Document Ingestion Pipeline | 3/4 complete | 8 min | 3 min |
+| 2. Document Ingestion Pipeline | 4/4 tasks complete (checkpoint pending) | 11 min | 3 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-02 (16 min), 01-03 (10 min), 02-01 (2 min), 02-02 (2 min), 02-03 (4 min)
+- Last 5 plans: 01-03 (10 min), 02-01 (2 min), 02-02 (2 min), 02-03 (4 min), 02-04 (3 min)
 - Trend: N/A (5 data points)
 
 *Updated after each plan completion*
@@ -66,6 +66,10 @@ Recent decisions affecting current work:
 - [Phase 02-document-ingestion-pipeline]: chunk_ids parallel list: UUIDs generated as separate list alongside parsed_chunks; ParsedChunk never monkey-patched with extra attributes
 - [Phase 02-document-ingestion-pipeline]: Sync QdrantClient in worker process (not AsyncQdrantClient) -- worker has no asyncio event loop
 - [Phase 02-document-ingestion-pipeline]: _get_sync_engine() converts sqlite+aiosqlite:// to sqlite:// for worker synchronous SQLAlchemy access
+- [Phase 02-document-ingestion-pipeline]: multiprocessing.set_start_method("spawn", force=True) called at top of main.py before any CUDA imports — prevents fork-after-CUDA undefined behavior on Linux
+- [Phase 02-document-ingestion-pipeline]: Explicit await db.commit() before worker_manager.enqueue() — guarantees Document row visible in SQLite before worker process reads it
+- [Phase 02-document-ingestion-pipeline]: Explicit await db.commit() before qdrant_store.delete_document() — SQLite is authoritative; Qdrant orphan vectors acceptable on Qdrant failure
+- [Phase 02-document-ingestion-pipeline]: Files saved as {sha256_hash}{ext} in DATA_DIR/uploads/ — hash-based naming enables O(1) dedup check and easy cleanup on delete
 
 ### Pending Todos
 
@@ -84,5 +88,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 02-03-PLAN.md (worker infrastructure) — Phase 2 plan 3/4 complete
+Stopped at: 02-04-PLAN.md — Task 3 (checkpoint:human-verify) — 2 auto tasks complete, awaiting human verification of REST API endpoints
 Resume file: None
