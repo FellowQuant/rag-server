@@ -18,7 +18,10 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
+from rag_server.api.errors import register_exception_handlers
+from rag_server.api.middleware import LoggingMiddleware, UploadSizeLimitMiddleware
 from rag_server.config import get_settings
 from rag_server.database.engine import async_session, engine
 from rag_server.database.models import Base
@@ -202,16 +205,32 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="FellowQuant RAG Server",
     description="Document ingestion and retrieval for quantitative finance research",
-    version="0.4.0",
+    version="0.5.0",
     lifespan=lifespan,
+)
+
+# Register RFC 7807 exception handlers (before middleware and routers)
+register_exception_handlers(app)
+
+# Add middleware (LIFO order — last added becomes outermost)
+# Desired runtime order: CORS → Logging → UploadSizeLimit → Router
+# Add in reverse: UploadSizeLimit first (innermost), CORS last (outermost)
+app.add_middleware(UploadSizeLimitMiddleware, max_upload_size=get_settings().max_upload_size)
+app.add_middleware(LoggingMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Mount document lifecycle router.
 from rag_server.api.documents import router as documents_router  # noqa: E402
-app.include_router(documents_router)
+app.include_router(documents_router, prefix="/api/v1")
 
 from rag_server.api.ask import router as ask_router  # noqa: E402
-app.include_router(ask_router)
+app.include_router(ask_router, prefix="/api/v1")
 
 
 @app.get("/health")
