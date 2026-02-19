@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Core value:** Accurate retrieval and synthesis from dense quantitative finance documents — tables stay as tables, formulas stay as formulas, and citations trace back to exact sources.
-**Current focus:** Phase 1 - Foundation & Storage
+**Current focus:** Phase 2 - Document Ingestion Pipeline
 
 ## Current Position
 
-Phase: 1 of 6 (Foundation & Storage)
-Plan: 3 of 3 (01-03-PLAN.md — Qdrant client wrapper) — COMPLETE
-Status: Phase 1 complete
-Last activity: 2026-02-18 — 01-03-PLAN.md complete
+Phase: 2 of 6 (Document Ingestion Pipeline)
+Plan: 1 of 4 (02-01-PLAN.md — Document parsers and chunking infrastructure) — COMPLETE
+Status: Phase 2 in progress (1/4 plans complete)
+Last activity: 2026-02-19 — 02-01-PLAN.md complete
 
-Progress: [███░░░░░░░] 17% (3 of 18 plans complete)
+Progress: [████░░░░░░] 22% (4 of 18 plans complete)
 
 ## Performance Metrics
 
@@ -28,10 +28,11 @@ Progress: [███░░░░░░░] 17% (3 of 18 plans complete)
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1. Foundation & Storage | 3/3 complete | 28 min | 9 min |
+| 2. Document Ingestion Pipeline | 1/4 complete | 2 min | 2 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2 min), 01-02 (16 min), 01-03 (10 min)
-- Trend: N/A (3 data points)
+- Last 5 plans: 01-01 (2 min), 01-02 (16 min), 01-03 (10 min), 02-01 (2 min)
+- Trend: N/A (4 data points)
 
 *Updated after each plan completion*
 
@@ -54,6 +55,11 @@ Recent decisions affecting current work:
 - [Phase 01-foundation-storage]: AsyncQdrantClient used exclusively — sync QdrantClient deadlocks FastAPI event loop
 - [Phase 01-foundation-storage]: sparse_vectors_config declared at Qdrant collection creation — schema immutable after creation; adding sparse later requires dropping collection (data loss)
 - [Phase 01-foundation-storage]: get_collection_info() uses points_count not vectors_count — vectors_count removed in qdrant-client >=1.14
+- [Phase 02-document-ingestion-pipeline]: tiktoken cl100k_base used as token counter for BGE-M3 — avoids pulling in sentence-transformers at chunking stage
+- [Phase 02-document-ingestion-pipeline]: docling_settings.perf.elements_batch_size=2 set globally — halves VRAM requirement from ~18-20 GB to ~8-10 GB for CodeFormula enrichment
+- [Phase 02-document-ingestion-pipeline]: pylatexenc pinned to ==2.10 — 3.x alpha has breaking API changes
+- [Phase 02-document-ingestion-pipeline]: do_formula_enrichment=True mandatory — FormulaItem.text is empty without enrichment (detection does not equal recognition)
+- [Phase 02-document-ingestion-pipeline]: Formula content = preceding_paragraph + formula_latex; display_content = raw LaTeX only
 
 ### Pending Todos
 
@@ -71,6 +77,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-18
-Stopped at: Completed 01-03-PLAN.md (Qdrant client wrapper + smoke test) — Phase 1 Foundation & Storage complete
+Last session: 2026-02-19
+Stopped at: Completed 02-01-PLAN.md (Document parsers and chunking infrastructure) — Phase 2 plan 1/4 complete
 Resume file: None
