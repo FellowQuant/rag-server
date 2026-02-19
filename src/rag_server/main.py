@@ -23,6 +23,9 @@ from rag_server.config import get_settings
 from rag_server.database.engine import async_session, engine
 from rag_server.database.models import Base
 from rag_server.ingestion.embedder import Embedder
+from rag_server.llm.config import get_llm_settings
+from rag_server.llm.provider import create_provider
+from rag_server.llm.synthesis import SynthesisEngine
 from rag_server.retrieval.bm25_manager import BM25Manager
 from rag_server.retrieval.engine import RetrievalEngine
 from rag_server.retrieval.reranker import Reranker
@@ -147,6 +150,34 @@ async def lifespan(app: FastAPI):
     app.state.retrieval_engine = retrieval_engine
     logger.info("RetrievalEngine ready")
 
+    # ---------------------------------------------------------------------------
+    # Phase 4: LLM Integration
+    # ---------------------------------------------------------------------------
+    # Load LLM settings from llm.yaml (project root)
+    llm_settings = get_llm_settings()
+    logger.info(
+        "LLM provider: %s (model=%s)",
+        llm_settings.llm.provider,
+        llm_settings.llm.model,
+    )
+
+    # Instantiate the configured provider (AsyncOpenAI client or BedrockProvider)
+    # Provider is lightweight to create — no network connection at init time.
+    llm_provider = create_provider(llm_settings.llm)
+    app.state.llm_provider = llm_provider
+
+    # Wire SynthesisEngine with provider and LLM config
+    synthesis_engine = SynthesisEngine(
+        provider=llm_provider,
+        config=llm_settings.llm,
+    )
+    app.state.synthesis_engine = synthesis_engine
+    logger.info(
+        "SynthesisEngine ready (context_chunks=%d, max_context_tokens=%d)",
+        llm_settings.llm.context_chunks,
+        llm_settings.llm.max_context_tokens,
+    )
+
     logger.info("RAG Server started (DATA_DIR=%s)", settings.data_dir)
     yield
 
@@ -171,13 +202,16 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="FellowQuant RAG Server",
     description="Document ingestion and retrieval for quantitative finance research",
-    version="0.3.0",
+    version="0.4.0",
     lifespan=lifespan,
 )
 
 # Mount document lifecycle router.
 from rag_server.api.documents import router as documents_router  # noqa: E402
 app.include_router(documents_router)
+
+from rag_server.api.ask import router as ask_router  # noqa: E402
+app.include_router(ask_router)
 
 
 @app.get("/health")
