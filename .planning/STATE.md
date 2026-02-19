@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 ## Current Position
 
 Phase: 2 of 6 (Document Ingestion Pipeline)
-Plan: 1 of 4 (02-01-PLAN.md — Document parsers and chunking infrastructure) — COMPLETE
-Status: Phase 2 in progress (1/4 plans complete)
-Last activity: 2026-02-19 — 02-01-PLAN.md complete
+Plan: 2 of 4 (02-02-PLAN.md — BGE-M3 embedder module) — COMPLETE
+Status: Phase 2 in progress (2/4 plans complete)
+Last activity: 2026-02-19 — 02-02-PLAN.md complete
 
-Progress: [████░░░░░░] 22% (4 of 18 plans complete)
+Progress: [█████░░░░░] 28% (5 of 18 plans complete)
 
 ## Performance Metrics
 
@@ -28,11 +28,11 @@ Progress: [████░░░░░░] 22% (4 of 18 plans complete)
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1. Foundation & Storage | 3/3 complete | 28 min | 9 min |
-| 2. Document Ingestion Pipeline | 1/4 complete | 2 min | 2 min |
+| 2. Document Ingestion Pipeline | 2/4 complete | 4 min | 2 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2 min), 01-02 (16 min), 01-03 (10 min), 02-01 (2 min)
-- Trend: N/A (4 data points)
+- Last 5 plans: 01-01 (2 min), 01-02 (16 min), 01-03 (10 min), 02-01 (2 min), 02-02 (2 min)
+- Trend: N/A (5 data points)
 
 *Updated after each plan completion*
 
@@ -60,6 +60,9 @@ Recent decisions affecting current work:
 - [Phase 02-document-ingestion-pipeline]: pylatexenc pinned to ==2.10 — 3.x alpha has breaking API changes
 - [Phase 02-document-ingestion-pipeline]: do_formula_enrichment=True mandatory — FormulaItem.text is empty without enrichment (detection does not equal recognition)
 - [Phase 02-document-ingestion-pipeline]: Formula content = preceding_paragraph + formula_latex; display_content = raw LaTeX only
+- [Phase 02-document-ingestion-pipeline]: Sparse indices use raw int token IDs from lexical_weights — do NOT call convert_id_to_token() which returns strings incompatible with Qdrant
+- [Phase 02-document-ingestion-pipeline]: Embedder instantiated once per worker process (not per-document) to avoid repeated 5-10s model load latency
+- [Phase 02-document-ingestion-pipeline]: return_colbert_vecs=False in BGE-M3 encode() — ColBERT vectors not needed until Phase 3+ reranking; saves VRAM
 
 ### Pending Todos
 
@@ -78,5 +81,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 02-01-PLAN.md (Document parsers and chunking infrastructure) — Phase 2 plan 1/4 complete
+Stopped at: Completed 02-02-PLAN.md (BGE-M3 embedder module) — Phase 2 plan 2/4 complete
 Resume file: None
