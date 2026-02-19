@@ -232,6 +232,9 @@ app.include_router(documents_router, prefix="/api/v1")
 from rag_server.api.ask import router as ask_router  # noqa: E402
 app.include_router(ask_router, prefix="/api/v1")
 
+from rag_server.api.retrieve import router as retrieve_router  # noqa: E402
+app.include_router(retrieve_router, prefix="/api/v1")
+
 
 @app.get("/health")
 async def health() -> dict:

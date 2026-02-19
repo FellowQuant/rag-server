@@ -76,3 +76,44 @@ class AskResponse(BaseModel):
     """
     answer: str
     sources: list[SourceItem]
+
+
+# ---------------------------------------------------------------------------
+# Retrieve endpoint schemas (Phase 5)
+# ---------------------------------------------------------------------------
+
+class RetrieveRequest(BaseModel):
+    """Request body for POST /retrieve."""
+    query: str
+    top_k: int = 10                          # default 10, same as /ask (Claude's discretion)
+    document_ids: list[str] | None = None    # optional: scope to specific documents
+    min_score: float | None = None           # optional: reranker score threshold (0.0-1.0)
+
+
+class ChunkResultItem(BaseModel):
+    """Serialized ChunkResult for the /retrieve response.
+
+    Maps directly from retrieval.models.ChunkResult dataclass fields.
+    All five retrieval scores included per locked CONTEXT.md decision.
+    """
+    chunk_id: str
+    document_id: str
+    chunk_index: int
+    content: str
+    display_content: str | None
+    source_filename: str
+    page_number: int | None
+    section_heading: str | None
+    chunk_type: str
+    bm25_score: float
+    dense_score: float
+    sparse_score: float
+    rrf_score: float
+    reranker_score: float
+
+
+class RetrieveResponse(BaseModel):
+    """Response for POST /retrieve."""
+    query: str
+    results: list[ChunkResultItem]
+    total_candidates: int
