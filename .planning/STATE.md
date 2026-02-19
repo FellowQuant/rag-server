@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Core value:** Accurate retrieval and synthesis from dense quantitative finance documents — tables stay as tables, formulas stay as formulas, and citations trace back to exact sources.
-**Current focus:** Phase 2 - Document Ingestion Pipeline
+**Current focus:** Phase 3 - Retrieval API
 
 ## Current Position
 
-Phase: 2 of 6 (Document Ingestion Pipeline)
-Plan: 4 of 4 (02-04-PLAN.md — REST API layer) — awaiting checkpoint:human-verify
-Status: Phase 2 in progress (4/4 auto tasks complete, checkpoint pending)
-Last activity: 2026-02-19 — 02-04-PLAN.md tasks complete, checkpoint pending
+Phase: 3 of 6 (Retrieval API)
+Plan: 1 of ? (next plan TBD)
+Status: Phase 2 complete (4/4 plans verified end-to-end); Phase 3 ready to begin
+Last activity: 2026-02-19 — 02-04-PLAN.md verified by human (all endpoints confirmed working)
 
-Progress: [███████░░░] 38% (7 of 18 plans — tasks complete, checkpoint pending)
+Progress: [████████░░] 44% (8 of 18 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4 (02-04 checkpoint pending)
+- Total plans completed: 8
 - Average duration: 8 min
 - Total execution time: 0.5 hours
 
@@ -28,7 +28,7 @@ Progress: [███████░░░] 38% (7 of 18 plans — tasks complete
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1. Foundation & Storage | 3/3 complete | 28 min | 9 min |
-| 2. Document Ingestion Pipeline | 4/4 tasks complete (checkpoint pending) | 11 min | 3 min |
+| 2. Document Ingestion Pipeline | 4/4 complete | 11 min | 3 min |
 
 **Recent Trend:**
 - Last 5 plans: 01-03 (10 min), 02-01 (2 min), 02-02 (2 min), 02-03 (4 min), 02-04 (3 min)
@@ -70,16 +70,15 @@ Recent decisions affecting current work:
 - [Phase 02-document-ingestion-pipeline]: Explicit await db.commit() before worker_manager.enqueue() — guarantees Document row visible in SQLite before worker process reads it
 - [Phase 02-document-ingestion-pipeline]: Explicit await db.commit() before qdrant_store.delete_document() — SQLite is authoritative; Qdrant orphan vectors acceptable on Qdrant failure
 - [Phase 02-document-ingestion-pipeline]: Files saved as {sha256_hash}{ext} in DATA_DIR/uploads/ — hash-based naming enables O(1) dedup check and easy cleanup on delete
+- [Phase 02-document-ingestion-pipeline]: qdrant-client 1.16.2 vs Qdrant server 1.13.4 version mismatch — upsert works (HTTP 200 confirmed) but versions are misaligned; pin qdrant-client==1.13.* or upgrade Docker image at Phase 3 start
 
 ### Pending Todos
 
-None.
+- Pin qdrant-client version to match Qdrant server 1.13.4 at Phase 3 start (or upgrade Docker image) — currently at 1.16.2, warning logged at runtime
 
 ### Blockers/Concerns
 
 **From Research:**
-- Phase 2: Formula-aware chunking is critical — naive splitting will destroy mathematical notation
-- Phase 2: Citation metadata must propagate from parser through to vector store
 - Phase 4: VRAM conflicts between embedding model and LLM — sequence operations carefully
 
 **From 01-01 Execution:**
@@ -88,5 +87,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: 02-04-PLAN.md — Task 3 (checkpoint:human-verify) — 2 auto tasks complete, awaiting human verification of REST API endpoints
+Stopped at: Phase 2 complete — 02-04-PLAN.md verified end-to-end (human checkpoint approved)
 Resume file: None

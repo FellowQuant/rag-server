@@ -66,10 +66,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Parsers & chunker: Docling PDF parser, pylatexenc LaTeX parser, nbformat Jupyter parser, ParsedChunk dataclass
-- [ ] 02-02-PLAN.md — BGE-M3 embedder: Embedder class with load/unload/embed_chunks, EmbeddingResult with dense+sparse vectors
-- [ ] 02-03-PLAN.md — Worker process: pipeline (parse→embed→SQLite→Qdrant with rollback), process entry point, WorkerManager lifecycle
-- [ ] 02-04-PLAN.md — Ingestion API: POST/GET/LIST/DELETE /documents endpoints, FastAPI lifespan, integration smoke test
+- [x] 02-01-PLAN.md — Parsers & chunker: Docling PDF parser, pylatexenc LaTeX parser, nbformat Jupyter parser, ParsedChunk dataclass
+- [x] 02-02-PLAN.md — BGE-M3 embedder: Embedder class with load/unload/embed_chunks, EmbeddingResult with dense+sparse vectors
+- [x] 02-03-PLAN.md — Worker process: pipeline (parse→embed→SQLite→Qdrant with rollback), process entry point, WorkerManager lifecycle
+- [x] 02-04-PLAN.md — Ingestion API: POST/GET/LIST/DELETE /documents endpoints, FastAPI lifespan, integration smoke test
 
 ### Phase 3: Retrieval Engine
 **Goal**: Users can semantically search documents with hybrid ranking and get back cited chunks

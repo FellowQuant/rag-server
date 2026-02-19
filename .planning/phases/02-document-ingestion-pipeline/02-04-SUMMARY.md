@@ -41,6 +41,7 @@ key-decisions:
   - "Explicit await db.commit() before qdrant_store.delete_document() — ensures SQLite is authoritative; Qdrant orphan vectors acceptable on Qdrant failure"
   - "Files saved as {sha256_hash}{ext} in DATA_DIR/uploads/ — hash-based naming enables O(1) dedup check and easy cleanup on delete"
   - "config.ensure_data_dirs() creates uploads/ subdirectory — previously only created qdrant/"
+  - "Qdrant client 1.16.2 vs server 1.13.4 version mismatch — upsert works (HTTP 200) but consider pinning qdrant-client==1.13.x or upgrading Docker image to match; defer to Phase 3"
 
 patterns-established:
   - "API router pattern: APIRouter(prefix='/documents') mounted in main.py via app.include_router()"
@@ -56,14 +57,14 @@ completed: 2026-02-19
 
 # Phase 2 Plan 04: REST API Layer Summary
 
-**FastAPI REST API with 4 document lifecycle endpoints, WorkerManager lifespan wiring, and 5-step end-to-end integration smoke test**
+**FastAPI REST API with 4 document lifecycle endpoints, WorkerManager lifespan wiring, and verified end-to-end ingestion of .ipynb notebooks via BGE-M3 dense+sparse embeddings into Qdrant**
 
 ## Performance
 
 - **Duration:** 3 min
 - **Started:** 2026-02-19T14:47:37Z
-- **Completed:** 2026-02-19T14:50:41Z
-- **Tasks:** 2 auto tasks complete; 1 checkpoint:human-verify pending user approval
+- **Completed:** 2026-02-19
+- **Tasks:** 2 auto tasks + 1 checkpoint:human-verify (approved)
 - **Files modified:** 6
 
 ## Accomplishments
@@ -71,6 +72,7 @@ completed: 2026-02-19
 - FastAPI lifespan manages WorkerManager subprocess and Qdrant client lifecycle
 - multiprocessing.set_start_method("spawn") called before all CUDA imports in main.py
 - Integration smoke test covers full upload→index→poll→verify SQLite→verify Qdrant→delete cycle
+- Human verification confirmed: POST /documents → 202, worker pipeline → 3 chunks extracted, BGE-M3 embeddings → Qdrant upsert HTTP 200, GET /documents/{id} → indexed status, DELETE → 204 No Content
 
 ## Task Commits
 
@@ -79,7 +81,7 @@ Each task was committed atomically:
 1. **Task 1: Pydantic schemas, documents router, and FastAPI app with lifespan** - `1545994` (feat)
 2. **Task 2: Integration smoke test script** - `68bd206` (feat)
 
-**Plan metadata:** pending (awaiting checkpoint approval)
+**Plan metadata:** `6505407` (docs: complete REST API layer plan)
 
 ## Files Created/Modified
 - `src/rag_server/api/__init__.py` — package marker for api subpackage
@@ -95,13 +97,22 @@ Each task was committed atomically:
 - Explicit await db.commit() before qdrant_store.delete_document() — SQLite is authoritative; if Qdrant delete fails, vectors become orphaned but the document no longer exists in the authoritative store
 - Files stored as {sha256_hash}{ext} — enables deterministic dedup without a separate lookup; makes DELETE reconstruction trivial
 
+## Known Issues
+
+**Qdrant client/server version mismatch (non-blocking)**
+- **Client installed:** qdrant-client 1.16.2
+- **Server running:** Qdrant Docker image 1.13.4 (pinned in docker-compose.yml)
+- **Impact:** Warning logged at runtime; all operations succeed (upsert HTTP 200 confirmed)
+- **Risk:** Future API changes between 1.13.x and 1.16.x could cause silent failures
+- **Recommended action (deferred to Phase 3):** Either pin `qdrant-client==1.13.*` in pyproject.toml or upgrade Qdrant Docker image to match the installed client version
+
 ## Deviations from Plan
 
 None - plan executed exactly as written.
 
 ## Issues Encountered
 
-None. All dependencies (aiofiles, python-multipart) were already in pyproject.toml from prior planning. The api/ directory did not exist and was created as part of the plan.
+None blocking. One known warning: Qdrant client 1.16.2 vs server 1.13.4 version mismatch. All operations succeed — documented as a known issue to address before Phase 3.
 
 ## User Setup Required
 
@@ -115,10 +126,21 @@ To run the full integration smoke test:
 Note: Full test requires BGE-M3 model download (~2GB) to complete the indexing step.
 
 ## Next Phase Readiness
-- Phase 2 (Document Ingestion Pipeline) is structurally complete — all 4 plans implemented
+- Phase 2 (Document Ingestion Pipeline) is complete — all 4 plans implemented and verified end-to-end
 - Phase 3 (Retrieval API) can begin: it depends on app.state.qdrant_store and the Qdrant collection schema established in Phase 1-2
 - The /documents endpoints provide the ingestion surface; Phase 3 will add /search endpoints
-- Checkpoint human-verify required before Phase 2 is officially closed
+- Address Qdrant client/server version mismatch at Phase 3 start (pin versions to avoid future surprises)
+
+## Self-Check: PASSED
+
+- `src/rag_server/api/__init__.py` - FOUND
+- `src/rag_server/api/schemas.py` - FOUND
+- `src/rag_server/api/documents.py` - FOUND
+- `src/rag_server/main.py` - FOUND
+- `scripts/verify_ingestion.py` - FOUND
+- Commit `1545994` - FOUND
+- Commit `68bd206` - FOUND
+- Commit `6505407` - FOUND
 
 ---
 *Phase: 02-document-ingestion-pipeline*
