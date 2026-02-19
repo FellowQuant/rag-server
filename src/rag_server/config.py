@@ -28,6 +28,7 @@ class Settings(BaseSettings):
         """Create data directory structure if it does not exist."""
         self.data_dir.mkdir(parents=True, exist_ok=True)
         (self.data_dir / "qdrant").mkdir(parents=True, exist_ok=True)
+        (self.data_dir / "uploads").mkdir(parents=True, exist_ok=True)
 
 
 @lru_cache
