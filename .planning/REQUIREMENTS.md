@@ -48,9 +48,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### MCP Server
 
-- [ ] **MCP-01**: System exposes an MCP server accessible from Claude Code via stdio transport
-- [ ] **MCP-02**: MCP server provides a `retrieve` tool that returns raw chunks with citations for a given query
-- [ ] **MCP-03**: MCP server provides an `ask` tool that returns LLM-synthesized answers with citations for a given query
+- [x] **MCP-01**: System exposes an MCP server accessible from Claude Code via stdio transport
+- [x] **MCP-02**: MCP server provides a `retrieve` tool that returns raw chunks with citations for a given query
+- [x] **MCP-03**: MCP server provides an `ask` tool that returns LLM-synthesized answers with citations for a given query
 - [ ] **MCP-04**: MCP server provides an `ingest_document` tool to add documents to the corpus from Claude Code
 - [ ] **MCP-05**: MCP server provides a `list_documents` tool to view corpus inventory and indexing status
 - [ ] **MCP-06**: MCP server provides a `delete_document` tool to remove documents from the corpus
@@ -122,9 +122,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | API-04 | Phase 5 | Complete |
 | API-05 | Phase 5 | Complete |
 | API-06 | Phase 5 | Complete |
-| MCP-01 | Phase 6 | Pending |
-| MCP-02 | Phase 6 | Pending |
-| MCP-03 | Phase 6 | Pending |
+| MCP-01 | Phase 6 | Complete |
+| MCP-02 | Phase 6 | Complete |
+| MCP-03 | Phase 6 | Complete |
 | MCP-04 | Phase 6 | Pending |
 | MCP-05 | Phase 6 | Pending |
 | MCP-06 | Phase 6 | Pending |

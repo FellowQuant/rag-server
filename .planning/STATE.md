@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Core value:** Accurate retrieval and synthesis from dense quantitative finance documents — tables stay as tables, formulas stay as formulas, and citations trace back to exact sources.
-**Current focus:** Phase 6 - Deployment (Phase 5 complete)
+**Current focus:** Phase 6 - MCP Server (1 of 2 plans complete)
 
 ## Current Position
 
-Phase: 5 of 6 (REST API)
-Plan: 3 of 3 (05-03 complete — Phase 5 DONE)
-Status: Phase 5 complete (3/3 plans complete) — ready for Phase 6
-Last activity: 2026-02-19 — 05-03-PLAN.md complete (Phase 5 API end-to-end verification script, 13 checks covering API-01 through API-06)
+Phase: 6 of 6 (MCP Server)
+Plan: 1 of 2 (06-01 complete)
+Status: Phase 6 in progress (1/2 plans complete)
+Last activity: 2026-02-19 — 06-01-PLAN.md complete (FastMCP server with lifespan, retrieve and ask tools)
 
-Progress: [██████████] 100% (18 of 18 plans complete)
+Progress: [██████████] 100% (19 of 20 plans complete)
 
 ## Performance Metrics
 
@@ -116,6 +116,10 @@ Recent decisions affecting current work:
 - [Phase 05-rest-api]: BASE_URL configurable via env var (default localhost:8001) for verify_api.py smoke test
 - [Phase 05-rest-api]: ChunkResultItem shape check skips gracefully when corpus empty — valid server state on fresh install
 - [Phase 05-rest-api]: POST /api/v1/ask accepts 200 or 500 as endpoint-present — 500 means LLM unavailable, not missing route
+- [Phase 06-mcp-server]: ctx: Context placed as first parameter — Python syntax prevents non-default parameter after default-having parameters; FastMCP injects by type annotation regardless of position
+- [Phase 06-mcp-server]: BM25 loaded from disk only on MCP start (no rebuild) — stale BM25 acceptable; restart server after indexing new documents
+- [Phase 06-mcp-server]: No WorkerManager in MCP lifespan — MCP server is query-only; ingestion happens exclusively via FastAPI
+- [Phase 06-mcp-server]: LLM failure in ask tool falls back to answer=null + raw sources + note (not ToolError) — partial results more useful than error for Claude Code
 
 ### Pending Todos
 
@@ -132,5 +136,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 05-03-PLAN.md — Phase 5 API verification script (scripts/verify_api.py, 13 checks, API-01 through API-06). Phase 5 REST API fully complete (3/3 plans).
+Stopped at: Completed 06-01-PLAN.md — FastMCP server with lifespan, retrieve and ask tools (src/rag_server/mcp_server.py). Phase 6 MCP Server 1/2 plans complete.
 Resume file: None

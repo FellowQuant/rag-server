@@ -158,4 +158,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Retrieval Engine | 4/4 | Complete   | 2026-02-19 |
 | 4. LLM Integration | 3/4 | In Progress|  |
 | 5. REST API | 3/3 | Complete   | 2026-02-19 |
-| 6. MCP Server | 0/TBD | Not started | - |
+| 6. MCP Server | 1/2 | In Progress|  |
