@@ -22,8 +22,11 @@ Usage:
 Expected output: all 13 checks PASS, exit code 0.
 If server is not running, script prints a connection error and exits 1.
 """
+import http.client
+import json
 import os
 import sys
+import urllib.parse
 
 import httpx
 
@@ -245,22 +248,36 @@ def main() -> int:
 
             # ------------------------------------------------------------------
             # 13. Upload size limit — 413 with RFC 7807 shape (API-06 middleware)
+            # Use http.client directly: httpx rejects Content-Length mismatches,
+            # but http.client sends whatever header value we set.
             # ------------------------------------------------------------------
-            r = client.post(
-                f"{BASE_URL}/api/v1/documents",
-                content=b"x",  # tiny actual body
-                headers={"Content-Length": str(200 * 1024 * 1024)},  # 200 MB fake value
+            parsed = urllib.parse.urlparse(BASE_URL)
+            host = parsed.hostname or "localhost"
+            port = parsed.port or 8001
+            conn = http.client.HTTPConnection(host, port, timeout=10)
+            conn.request(
+                "POST",
+                "/api/v1/documents",
+                body=b"x",
+                headers={"Content-Length": str(200 * 1024 * 1024)},
             )
-            body = r.json() if r.status_code == 413 else {}
+            raw = conn.getresponse()
+            raw_status = raw.status
+            raw_body_bytes = raw.read()
+            conn.close()
+            try:
+                body413 = json.loads(raw_body_bytes)
+            except Exception:
+                body413 = {}
             upload_limit_ok = (
-                r.status_code == 413
-                and isinstance(body, dict)
-                and all(k in body for k in ("type", "title", "status", "detail"))
+                raw_status == 413
+                and isinstance(body413, dict)
+                and all(k in body413 for k in ("type", "title", "status", "detail"))
             )
             check(
                 "POST /api/v1/documents Content-Length:200MB → 413 RFC 7807 shape",
                 upload_limit_ok,
-                f"status={r.status_code} keys={list(body.keys())}",
+                f"status={raw_status} keys={list(body413.keys())}",
             )
 
     except httpx.ConnectError as exc:
