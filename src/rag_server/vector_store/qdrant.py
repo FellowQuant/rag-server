@@ -66,22 +66,31 @@ class QdrantStore:
         self,
         chunks: list[dict[str, Any]],
     ) -> None:
-        """Upsert chunk points into Qdrant.
+        """Upsert chunk points into Qdrant with dense + sparse vectors.
 
         Each chunk dict must contain:
-            id: str             — UUID (matches chunks.id in SQLite)
-            dense_vector: list[float]   — 1024-element BGE-M3 dense embedding
-            payload: dict       — document_id, chunk_id, chunk_type, page_number,
-                                  section_heading, chunk_index
+            id: str                      — UUID matching chunks.id in SQLite
+            dense_vector: list[float]    — 1024-element BGE-M3 dense embedding
+            sparse_indices: list[int]    — BGE-M3 lexical weight token IDs (raw ints)
+            sparse_values: list[float]   — corresponding lexical weight floats
+            payload: dict                — document_id, chunk_type, page_number,
+                                           section_heading, chunk_index
 
-        Sparse vector is omitted in Phase 1 (populated in Phase 3).
-        Point structure accommodates sparse later: vector={"dense": [...]}
-        Adding "sparse" key in Phase 3 requires no schema change.
+        Points are upserted in a single call. wait=True ensures points are
+        searchable before this method returns.
         """
+        from qdrant_client.models import SparseVector
+
         points = [
             PointStruct(
                 id=chunk["id"],
-                vector={"dense": chunk["dense_vector"]},
+                vector={
+                    "dense": chunk["dense_vector"],
+                    "sparse": SparseVector(
+                        indices=chunk["sparse_indices"],
+                        values=chunk["sparse_values"],
+                    ),
+                },
                 payload=chunk["payload"],
             )
             for chunk in chunks
@@ -89,6 +98,7 @@ class QdrantStore:
         await self._client.upsert(
             collection_name=self._collection,
             points=points,
+            wait=True,
         )
 
     async def delete_document(self, document_id: str) -> None:
