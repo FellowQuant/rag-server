@@ -15,6 +15,13 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.34.0",
     "python-dotenv>=1.0.0",
+    "docling>=2.66.0",
+    "FlagEmbedding>=1.3.5",
+    "nbformat>=5.9",
+    "pylatexenc==2.10",
+    "python-multipart>=0.0.9",
+    "aiofiles>=23.0.0",
+    "tiktoken>=0.7.0",
 ]
 
 [tool.hatch.build.targets.wheel]
