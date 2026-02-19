@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Core value:** Accurate retrieval and synthesis from dense quantitative finance documents — tables stay as tables, formulas stay as formulas, and citations trace back to exact sources.
-**Current focus:** Phase 4 - LLM Synthesis
+**Current focus:** Phase 5 - Retrieval API (Phase 4 complete)
 
 ## Current Position
 
 Phase: 4 of 6 (LLM Integration)
-Plan: 3 of 4 (04-03 complete)
-Status: Phase 4 in progress (3/4 plans complete)
-Last activity: 2026-02-19 — 04-03-PLAN.md complete (SynthesisEngine with tiktoken token budget, lenient citation parsing, fallback source attribution, and tenacity retry for complete() and stream() provider calls)
+Plan: 4 of 4 (04-04 complete — Phase 4 complete)
+Status: Phase 4 complete (4/4 plans complete)
+Last activity: 2026-02-19 — 04-04-PLAN.md complete (POST /ask endpoint with SSE streaming, SynthesisEngine lifespan wiring, verify_llm.py smoke test)
 
-Progress: [██████████] 83% (15 of 18 plans complete)
+Progress: [██████████] 89% (16 of 18 plans complete)
 
 ## Performance Metrics
 
@@ -30,6 +30,7 @@ Progress: [██████████] 83% (15 of 18 plans complete)
 | 1. Foundation & Storage | 3/3 complete | 28 min | 9 min |
 | 2. Document Ingestion Pipeline | 4/4 complete | 11 min | 3 min |
 | 3. Retrieval Engine | 4/4 complete | 10 min | 2 min |
+| 4. LLM Integration | 4/4 complete | ~10 min | ~2 min |
 
 **Recent Trend:**
 - Last 5 plans: 02-02 (2 min), 02-03 (4 min), 02-04 (3 min), 03-01 (3 min)
@@ -100,6 +101,8 @@ Recent decisions affecting current work:
 - [Phase 04-llm-integration]: Token budget always keeps at least 1 chunk — prevents empty context block when single chunk exceeds budget
 - [Phase 04-llm-integration]: Citation suffix matching fallback after exact match — handles path-prefix variations like 'doc.pdf' vs '/data/uploads/doc.pdf'
 - [Phase 04-llm-integration]: parse_result() fallback includes all input chunks as sources when 0 citations found — never return empty sources when answer exists
+- [Phase 04-llm-integration]: response_model=None on POST /ask — FastAPI cannot infer Pydantic response model from AskResponse | EventSourceResponse union type
+- [Phase 04-llm-integration]: streaming=True is default query param on POST /ask — users get SSE by default, opt-in to non-streaming with streaming=false
 
 ### Pending Todos
 
@@ -116,5 +119,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 04-03-PLAN.md — SynthesisEngine with tiktoken token budget, lenient citation parsing with fallback, tenacity retry for complete()/stream() provider calls.
+Stopped at: Completed 04-04-PLAN.md — POST /ask endpoint with SSE streaming, SynthesisEngine lifespan wiring, verify_llm.py smoke test. Phase 4 LLM Integration complete.
 Resume file: None
