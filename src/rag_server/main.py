@@ -13,6 +13,7 @@ import multiprocessing
 # MUST be before any CUDA-related imports (torch, docling, FlagEmbedding).
 multiprocessing.set_start_method("spawn", force=True)
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -21,10 +22,49 @@ from fastapi import FastAPI
 from rag_server.config import get_settings
 from rag_server.database.engine import async_session, engine
 from rag_server.database.models import Base
+from rag_server.retrieval.bm25_manager import BM25Manager
 from rag_server.vector_store.qdrant import QdrantStore
 from rag_server.worker.manager import WorkerManager
 
 logger = logging.getLogger(__name__)
+
+
+async def _poll_bm25_updates(
+    result_queue: multiprocessing.Queue,
+    bm25_manager: BM25Manager,
+) -> None:
+    """Background asyncio task: poll worker result_queue and rebuild BM25 on signals.
+
+    Runs as a long-lived asyncio.Task created in lifespan. Cancelled on shutdown.
+    Uses asyncio.to_thread for the queue.get_nowait() call to avoid blocking
+    the event loop on a busy-wait.
+    """
+    while True:
+        try:
+            def _get_nowait():
+                try:
+                    return result_queue.get_nowait()
+                except Exception:
+                    return None
+
+            msg = await asyncio.to_thread(_get_nowait)
+            if msg and msg.get("type") == "indexed":
+                logger.info(
+                    "BM25 update signal received for document %s, rebuilding index",
+                    msg.get("document_id"),
+                )
+                async with async_session() as session:
+                    await bm25_manager.build(session)
+                logger.info("BM25 index rebuilt (%d chunks)", bm25_manager.chunk_count)
+            else:
+                # No message -- sleep briefly before polling again
+                await asyncio.sleep(0.5)
+        except asyncio.CancelledError:
+            logger.info("BM25 poll task cancelled -- shutting down")
+            break
+        except Exception:
+            logger.exception("BM25 poll task: unexpected error, continuing")
+            await asyncio.sleep(1.0)
 
 
 @asynccontextmanager
@@ -59,10 +99,36 @@ async def lifespan(app: FastAPI):
     worker_manager.start()
     app.state.worker_manager = worker_manager
 
+    # Initialize BM25 index.
+    bm25_pkl = settings.data_dir / "bm25.pkl"
+    bm25_manager = BM25Manager(bm25_pkl)
+
+    # Try loading from disk first (fast path); rebuild from SQLite if not found.
+    disk_loaded = await asyncio.to_thread(bm25_manager.load_from_disk)
+    if not disk_loaded:
+        logger.info("BM25: no pickle found, building from SQLite...")
+        async with async_session() as session:
+            await bm25_manager.build(session)
+
+    app.state.bm25_manager = bm25_manager
+    logger.info("BM25 index ready (%d chunks)", bm25_manager.chunk_count)
+
+    # Start background task that rebuilds BM25 when worker signals new documents.
+    bm25_poll_task = asyncio.create_task(
+        _poll_bm25_updates(worker_manager.result_queue, bm25_manager),
+        name="bm25-poll",
+    )
+
     logger.info("RAG Server started (DATA_DIR=%s)", settings.data_dir)
     yield
 
-    # Shutdown.
+    # Shutdown: cancel BM25 poll task first, then stop worker.
+    bm25_poll_task.cancel()
+    try:
+        await bm25_poll_task
+    except asyncio.CancelledError:
+        pass
+
     worker_manager.stop()
     await qdrant_store.close()
     await engine.dispose()

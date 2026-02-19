@@ -25,6 +25,7 @@ Design notes:
 from __future__ import annotations
 
 import logging
+import multiprocessing
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -239,6 +240,7 @@ def run_pipeline(
     job,
     converter: "DocumentConverter | None",
     embedder: Embedder,
+    result_queue: multiprocessing.Queue | None = None,
 ) -> None:
     """Execute the full ingestion pipeline for one IngestionJob.
 
@@ -250,6 +252,8 @@ def run_pipeline(
                    model load cost. Pass None only in tests (falls back to
                    constructing on demand -- slow).
         embedder: Pre-loaded Embedder instance from worker_main().
+        result_queue: Optional queue to send signals back to the FastAPI
+                      process (e.g., BM25 rebuild needed after indexing).
     """
     document_id = job.document_id
     engine = _get_sync_engine(job.sqlite_url)
@@ -328,6 +332,18 @@ def run_pipeline(
             logger.info(
                 "Pipeline: document %s indexed successfully (%d chunks)", document_id, len(parsed_chunks)
             )
+
+        # Signal FastAPI to rebuild BM25 index with newly indexed chunks.
+        # Sent for both "indexed" and "indexed_partial" -- both statuses mean
+        # the document's chunks are in SQLite and should be included in BM25.
+        if result_queue is not None:
+            try:
+                result_queue.put_nowait({"type": "indexed", "document_id": document_id})
+            except Exception:
+                logger.warning(
+                    "Pipeline: failed to send BM25 update signal for %s (queue full?)",
+                    document_id,
+                )
 
     except Exception as exc:
         logger.exception("Pipeline: failure on document %s", document_id)

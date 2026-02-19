@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 def worker_main(
     job_queue: multiprocessing.Queue,
+    result_queue: multiprocessing.Queue,
     stop_event: multiprocessing.Event,
 ) -> None:
     """Entry point for the worker subprocess.
@@ -45,6 +46,8 @@ def worker_main(
         job_queue: Shared queue populated by WorkerManager.enqueue() in the
                    FastAPI process. Jobs are IngestionJob dataclass instances.
                    A None sentinel signals shutdown.
+        result_queue: Queue for sending signals back to the FastAPI process
+                      (e.g., BM25 rebuild needed after successful indexing).
         stop_event: Set by WorkerManager.stop() to break the loop even if no
                     sentinel is in the queue.
     """
@@ -92,7 +95,7 @@ def worker_main(
 
         try:
             from rag_server.worker.pipeline import run_pipeline
-            run_pipeline(job, converter, embedder)
+            run_pipeline(job, converter, embedder, result_queue)
         except Exception:
             logger.exception("Worker: uncaught error processing job %s", getattr(job, "document_id", "unknown"))
 

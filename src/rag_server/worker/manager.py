@@ -45,6 +45,7 @@ class WorkerManager:
 
     def __init__(self) -> None:
         self._queue: multiprocessing.Queue | None = None
+        self._result_queue: multiprocessing.Queue | None = None
         self._stop_event: multiprocessing.Event | None = None
         self._process: multiprocessing.Process | None = None
 
@@ -56,13 +57,14 @@ class WorkerManager:
         message "Embedder: model loaded" appears.
         """
         self._queue = multiprocessing.Queue(maxsize=200)
+        self._result_queue = multiprocessing.Queue(maxsize=200)   # worker->FastAPI signals
         self._stop_event = multiprocessing.Event()
 
         from rag_server.worker.process import worker_main
 
         self._process = multiprocessing.Process(
             target=worker_main,
-            args=(self._queue, self._stop_event),
+            args=(self._queue, self._result_queue, self._stop_event),  # result_queue added
             daemon=True,
             name="rag-ingestion-worker",
         )
@@ -107,6 +109,13 @@ class WorkerManager:
             self._process.join(timeout=5)
 
         logger.info("WorkerManager: worker stopped")
+
+    @property
+    def result_queue(self) -> multiprocessing.Queue:
+        """Queue carrying worker->FastAPI signals (e.g., BM25 rebuild needed)."""
+        if self._result_queue is None:
+            raise RuntimeError("WorkerManager.start() must be called before result_queue access")
+        return self._result_queue
 
     @property
     def is_running(self) -> bool:
