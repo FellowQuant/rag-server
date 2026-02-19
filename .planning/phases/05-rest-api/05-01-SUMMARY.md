@@ -111,6 +111,16 @@ None - no external service configuration required.
 - Upload size limit enforced pre-body-read for efficient rejection
 - Ready for Phase 5 Plan 02 (if any) or Phase 6 deployment
 
+## Self-Check: PASSED
+
+- src/rag_server/api/middleware.py: FOUND
+- src/rag_server/api/errors.py: FOUND
+- src/rag_server/config.py: FOUND
+- src/rag_server/main.py: FOUND
+- .planning/phases/05-rest-api/05-01-SUMMARY.md: FOUND
+- Commit 0c9ceb2 (Task 1): FOUND
+- Commit 5ce6548 (Task 2): FOUND
+
 ---
 *Phase: 05-rest-api*
 *Completed: 2026-02-19*
