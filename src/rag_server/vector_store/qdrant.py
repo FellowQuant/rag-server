@@ -9,6 +9,9 @@ from qdrant_client import AsyncQdrantClient  # NOT QdrantClient — sync causes 
 from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.models import (
     Distance,
+    FieldCondition,
+    Filter,
+    MatchAny,
     PointStruct,
     SparseIndexParams,
     SparseVectorParams,
@@ -156,6 +159,7 @@ class QdrantStore:
         self,
         dense_vector: list[float],
         limit: int = 50,
+        query_filter: Filter | None = None,
     ) -> list[VectorSearchResult]:
         """Search collection by dense (cosine) vector similarity.
 
@@ -163,6 +167,9 @@ class QdrantStore:
             dense_vector: 1024-dimensional BGE-M3 dense embedding for the query.
             limit: Maximum number of results to return (use candidate pool size,
                    e.g. 50, not final top_k — reranker narrows to top_k later).
+            query_filter: Optional Qdrant Filter to restrict the search scope
+                          (e.g. to specific document_ids). When None, global
+                          search is performed (backward compatible default).
 
         Returns:
             List of VectorSearchResult sorted by score descending.
@@ -172,6 +179,7 @@ class QdrantStore:
             query=dense_vector,
             using="dense",
             limit=limit,
+            query_filter=query_filter,
             with_payload=True,
             with_vectors=False,
         )
@@ -189,6 +197,7 @@ class QdrantStore:
         sparse_indices: list[int],
         sparse_values: list[float],
         limit: int = 50,
+        query_filter: Filter | None = None,
     ) -> list[VectorSearchResult]:
         """Search collection by sparse (learned term weight) vector similarity.
 
@@ -196,6 +205,9 @@ class QdrantStore:
             sparse_indices: BGE-M3 lexical weight token IDs (raw ints).
             sparse_values: Corresponding lexical weight floats.
             limit: Maximum number of results to return.
+            query_filter: Optional Qdrant Filter to restrict the search scope
+                          (e.g. to specific document_ids). When None, global
+                          search is performed (backward compatible default).
 
         Returns:
             List of VectorSearchResult sorted by score descending.
@@ -212,6 +224,7 @@ class QdrantStore:
             query=SparseVector(indices=sparse_indices, values=sparse_values),
             using="sparse",
             limit=limit,
+            query_filter=query_filter,
             with_payload=True,
             with_vectors=False,
         )

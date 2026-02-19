@@ -129,6 +129,7 @@ class RetrievalEngine:
         top_k: int = 10,
         min_score: float | None = None,
         candidate_k: int = 50,
+        document_ids: list[str] | None = None,
         session: "AsyncSession | None" = None,
     ) -> RetrievalResult:
         """Execute full hybrid retrieval pipeline.
@@ -141,6 +142,10 @@ class RetrievalEngine:
             candidate_k: Candidate pool size passed to each retrieval leg.
                          RRF merges candidates from all three legs; top-50
                          by RRF score are passed to the reranker. Default 50.
+            document_ids: Optional list of document UUIDs to scope the search.
+                          When provided, only chunks belonging to these documents
+                          are returned. When None, global search is performed
+                          (backward compatible — /ask endpoint unaffected).
             session: AsyncSession for SQLite content fetch. If None, a new
                      session is created from async_session().
 
@@ -150,6 +155,7 @@ class RetrievalEngine:
         from sqlalchemy import select
         from rag_server.database.engine import async_session as _async_session
         from rag_server.database.models import Chunk, Document
+        from qdrant_client.models import Filter, FieldCondition, MatchAny
 
         # --- Step 1: Embed query (GPU-bound, in thread pool) ---
         query_emb = await asyncio.to_thread(self._embedder.encode_query, query)
@@ -157,13 +163,38 @@ class RetrievalEngine:
         sparse_indices = query_emb.sparse_indices
         sparse_values = query_emb.sparse_values
 
+        # --- Step 1b: Build document_ids filter (when scoped search requested) ---
+        qdrant_filter: Filter | None = None
+        allowed_chunk_ids: set[str] | None = None
+
+        if document_ids is not None:
+            # Build Qdrant payload filter to restrict dense+sparse search to these documents.
+            qdrant_filter = Filter(
+                must=[FieldCondition(key="document_id", match=MatchAny(any=document_ids))]
+            )
+
+            # Pre-fetch allowed chunk_ids from SQLite to post-filter BM25 results.
+            # BM25 is corpus-wide; we must filter its results manually since it
+            # has no native document_id filter (unlike Qdrant payload filter).
+            async def _fetch_allowed_ids(sess):
+                result = await sess.execute(
+                    select(Chunk.id).where(Chunk.document_id.in_(document_ids))
+                )
+                return {row.id for row in result.all()}
+
+            if session is not None:
+                allowed_chunk_ids = await _fetch_allowed_ids(session)
+            else:
+                async with _async_session() as sess:
+                    allowed_chunk_ids = await _fetch_allowed_ids(sess)
+
         # --- Step 2: Parallel three-leg retrieval ---
         def _bm25_search():
             return self._bm25.search(query, top_n=candidate_k)
 
         bm25_task = asyncio.to_thread(_bm25_search)
-        dense_task = self._qdrant.query_dense(dense_vec, limit=candidate_k)
-        sparse_task = self._qdrant.query_sparse(sparse_indices, sparse_values, limit=candidate_k)
+        dense_task = self._qdrant.query_dense(dense_vec, limit=candidate_k, query_filter=qdrant_filter)
+        sparse_task = self._qdrant.query_sparse(sparse_indices, sparse_values, limit=candidate_k, query_filter=qdrant_filter)
 
         bm25_results, dense_results, sparse_results = await asyncio.gather(
             bm25_task, dense_task, sparse_task
@@ -171,6 +202,12 @@ class RetrievalEngine:
 
         # Normalize to [(chunk_id, score)] tuples
         bm25_ranking = bm25_results  # already [(chunk_id, float)]
+
+        # Post-filter BM25 results when document_ids scope is active.
+        # BM25 index is global — Qdrant filter doesn't apply here.
+        if allowed_chunk_ids is not None:
+            bm25_ranking = [(cid, score) for cid, score in bm25_ranking if cid in allowed_chunk_ids]
+
         dense_ranking = [(r.chunk_id, r.score) for r in dense_results]
         sparse_ranking = [(r.chunk_id, r.score) for r in sparse_results]
 
