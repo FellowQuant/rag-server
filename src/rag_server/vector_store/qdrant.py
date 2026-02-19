@@ -33,7 +33,13 @@ class QdrantStore:
 
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
-        self._client = AsyncQdrantClient(url=self._settings.qdrant_url)
+        # check_compatibility=False suppresses the UserWarning when client and server minor
+        # versions differ. Server upgraded to v1.16.3 (matches client 1.16.2); kept as
+        # belt-and-suspenders for any future drift.
+        self._client = AsyncQdrantClient(
+            url=self._settings.qdrant_url,
+            check_compatibility=False,  # suppress version-mismatch UserWarning
+        )
         self._collection = self._settings.qdrant_collection
 
     async def ensure_collection(self) -> None:
