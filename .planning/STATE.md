@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Core value:** Accurate retrieval and synthesis from dense quantitative finance documents — tables stay as tables, formulas stay as formulas, and citations trace back to exact sources.
-**Current focus:** Phase 3 - Retrieval API
+**Current focus:** Phase 4 - LLM Synthesis
 
 ## Current Position
 
 Phase: 3 of 6 (Retrieval API)
-Plan: 4 of 4 (03-03 complete; 03-04 next)
-Status: Phase 3 in progress (3/4 plans complete)
-Last activity: 2026-02-19 — 03-03-PLAN.md complete (Reranker class, Qwen3-Reranker-0.6B yes/no logit extraction, load/unload VRAM lifecycle)
+Plan: 4 of 4 (03-04 complete; Phase 3 COMPLETE)
+Status: Phase 3 complete (4/4 plans complete)
+Last activity: 2026-02-19 — 03-04-PLAN.md complete (RetrievalEngine three-leg hybrid retrieval + RRF + Qwen3 reranking, wired into FastAPI lifespan)
 
-Progress: [█████████░] 61% (11 of 18 plans complete)
+Progress: [██████████] 67% (12 of 18 plans complete)
 
 ## Performance Metrics
 
@@ -29,7 +29,7 @@ Progress: [█████████░] 61% (11 of 18 plans complete)
 |-------|-------|-------|----------|
 | 1. Foundation & Storage | 3/3 complete | 28 min | 9 min |
 | 2. Document Ingestion Pipeline | 4/4 complete | 11 min | 3 min |
-| 3. Retrieval Engine | 3/4 complete | 7 min | 2 min |
+| 3. Retrieval Engine | 4/4 complete | 10 min | 2 min |
 
 **Recent Trend:**
 - Last 5 plans: 02-02 (2 min), 02-03 (4 min), 02-04 (3 min), 03-01 (3 min)
@@ -84,6 +84,10 @@ Recent decisions affecting current work:
 - [Phase 03-retrieval-engine]: padding_side=left is load-bearing for Reranker — causal LM reads logits[:, -1, :]; right-padding shifts output away from final position
 - [Phase 03-retrieval-engine]: Reranker yes/no token IDs and prefix/suffix tokens pre-encoded at load() time — eliminates repeated tokenizer lookups per batch
 - [Phase 03-retrieval-engine]: compute_scores() synchronous GPU-bound — callers use asyncio.to_thread(reranker.compute_scores, query, docs)
+- [Phase 03-retrieval-engine]: Separate query-side Embedder instance in FastAPI process — worker Embedder lives in spawned subprocess; FastAPI needs its own for encode_query() at request time
+- [Phase 03-retrieval-engine]: min_score filter applied before top_k cutoff — ensures final slice is always highest-quality results above threshold
+- [Phase 03-retrieval-engine]: ordered_ids filters to only chunk_ids present in chunk_rows — handles edge case where Qdrant has IDs not yet in SQLite
+- [Phase 03-retrieval-engine]: Chunk content fetched from SQLite via bulk JOIN after RRF, before reranker — content lives only in SQLite, never in Qdrant payload
 
 ### Pending Todos
 
@@ -100,5 +104,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 03-03-PLAN.md — Reranker class, Qwen3-Reranker-0.6B yes/no logit extraction, load/unload VRAM lifecycle
+Stopped at: Completed 03-04-PLAN.md — RetrievalEngine three-leg hybrid retrieval + RRF + Qwen3 reranking, wired into FastAPI lifespan. Phase 3 complete.
 Resume file: None

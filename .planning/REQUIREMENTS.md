@@ -29,7 +29,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **RETR-02**: User can perform hybrid search combining semantic (vector) and keyword (BM25) retrieval with reciprocal rank fusion
 - [x] **RETR-03**: System reranks initial retrieval results using a cross-encoder model for improved precision
 - [x] **RETR-04**: Every retrieved chunk includes citation metadata: source document, page number, and section heading
-- [ ] **RETR-05**: User can perform cross-document synthesis queries that compare concepts across multiple sources using agentic multi-query patterns
+- [x] **RETR-05**: User can perform cross-document synthesis queries that compare concepts across multiple sources using agentic multi-query patterns
 
 ### LLM Integration
 
@@ -112,7 +112,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RETR-02 | Phase 3 | Complete |
 | RETR-03 | Phase 3 | Complete |
 | RETR-04 | Phase 3 | Complete |
-| RETR-05 | Phase 3 | Pending |
+| RETR-05 | Phase 3 | Complete |
 | LLM-01 | Phase 4 | Pending |
 | LLM-02 | Phase 4 | Pending |
 | LLM-03 | Phase 4 | Pending |
