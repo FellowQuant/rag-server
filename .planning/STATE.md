@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 ## Current Position
 
 Phase: 2 of 6 (Document Ingestion Pipeline)
-Plan: 2 of 4 (02-02-PLAN.md — BGE-M3 embedder module) — COMPLETE
-Status: Phase 2 in progress (2/4 plans complete)
-Last activity: 2026-02-19 — 02-02-PLAN.md complete
+Plan: 3 of 4 (02-03-PLAN.md — worker infrastructure) — COMPLETE
+Status: Phase 2 in progress (3/4 plans complete)
+Last activity: 2026-02-19 — 02-03-PLAN.md complete
 
-Progress: [█████░░░░░] 28% (5 of 18 plans complete)
+Progress: [██████░░░░] 33% (6 of 18 plans complete)
 
 ## Performance Metrics
 
@@ -28,10 +28,10 @@ Progress: [█████░░░░░] 28% (5 of 18 plans complete)
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1. Foundation & Storage | 3/3 complete | 28 min | 9 min |
-| 2. Document Ingestion Pipeline | 2/4 complete | 4 min | 2 min |
+| 2. Document Ingestion Pipeline | 3/4 complete | 8 min | 3 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2 min), 01-02 (16 min), 01-03 (10 min), 02-01 (2 min), 02-02 (2 min)
+- Last 5 plans: 01-02 (16 min), 01-03 (10 min), 02-01 (2 min), 02-02 (2 min), 02-03 (4 min)
 - Trend: N/A (5 data points)
 
 *Updated after each plan completion*
@@ -63,6 +63,9 @@ Recent decisions affecting current work:
 - [Phase 02-document-ingestion-pipeline]: Sparse indices use raw int token IDs from lexical_weights — do NOT call convert_id_to_token() which returns strings incompatible with Qdrant
 - [Phase 02-document-ingestion-pipeline]: Embedder instantiated once per worker process (not per-document) to avoid repeated 5-10s model load latency
 - [Phase 02-document-ingestion-pipeline]: return_colbert_vecs=False in BGE-M3 encode() — ColBERT vectors not needed until Phase 3+ reranking; saves VRAM
+- [Phase 02-document-ingestion-pipeline]: chunk_ids parallel list: UUIDs generated as separate list alongside parsed_chunks; ParsedChunk never monkey-patched with extra attributes
+- [Phase 02-document-ingestion-pipeline]: Sync QdrantClient in worker process (not AsyncQdrantClient) -- worker has no asyncio event loop
+- [Phase 02-document-ingestion-pipeline]: _get_sync_engine() converts sqlite+aiosqlite:// to sqlite:// for worker synchronous SQLAlchemy access
 
 ### Pending Todos
 
@@ -81,5 +84,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 02-02-PLAN.md (BGE-M3 embedder module) — Phase 2 plan 2/4 complete
+Stopped at: Completed 02-03-PLAN.md (worker infrastructure) — Phase 2 plan 3/4 complete
 Resume file: None

@@ -14,7 +14,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **INGEST-03**: User can upload Jupyter notebooks (.ipynb) and have them parsed preserving code cells, markdown, and outputs
 - [x] **INGEST-04**: System detects and preserves code blocks with language identification during document parsing
 - [x] **INGEST-05**: System chunks documents using formula-aware, table-aware splitting that never breaks atomic content units
-- [ ] **INGEST-06**: System tracks document indexing status (pending → processing → indexed → failed) queryable via API
+- [x] **INGEST-06**: System tracks document indexing status (pending → processing → indexed → failed) queryable via API
 
 ### Storage & Indexing
 
@@ -103,7 +103,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INGEST-03 | Phase 2 | Complete |
 | INGEST-04 | Phase 2 | Complete |
 | INGEST-05 | Phase 2 | Complete |
-| INGEST-06 | Phase 2 | Pending |
+| INGEST-06 | Phase 2 | Complete |
 | STORE-01 | Phase 1 | Complete |
 | STORE-02 | Phase 1 | Complete |
 | STORE-03 | Phase 1 | Complete |
