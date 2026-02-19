@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 ## Current Position
 
 Phase: 3 of 6 (Retrieval API)
-Plan: 1 of ? (next plan TBD)
-Status: Phase 2 complete (4/4 plans verified end-to-end); Phase 3 ready to begin
-Last activity: 2026-02-19 — 02-04-PLAN.md verified by human (all endpoints confirmed working)
+Plan: 2 of 4 (03-01 complete; 03-02 next)
+Status: Phase 3 in progress (1/4 plans complete)
+Last activity: 2026-02-19 — 03-01-PLAN.md complete (Qdrant upgraded to v1.16.3, query embedding and search methods added)
 
-Progress: [████████░░] 44% (8 of 18 plans complete)
+Progress: [████████░░] 50% (9 of 18 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: 8 min
-- Total execution time: 0.5 hours
+- Total plans completed: 9
+- Average duration: 7 min
+- Total execution time: ~1 hour
 
 **By Phase:**
 
@@ -29,10 +29,11 @@ Progress: [████████░░] 44% (8 of 18 plans complete)
 |-------|-------|-------|----------|
 | 1. Foundation & Storage | 3/3 complete | 28 min | 9 min |
 | 2. Document Ingestion Pipeline | 4/4 complete | 11 min | 3 min |
+| 3. Retrieval Engine | 1/4 complete | 3 min | 3 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-03 (10 min), 02-01 (2 min), 02-02 (2 min), 02-03 (4 min), 02-04 (3 min)
-- Trend: N/A (5 data points)
+- Last 5 plans: 02-02 (2 min), 02-03 (4 min), 02-04 (3 min), 03-01 (3 min)
+- Trend: N/A (4 recent data points)
 
 *Updated after each plan completion*
 
@@ -71,10 +72,14 @@ Recent decisions affecting current work:
 - [Phase 02-document-ingestion-pipeline]: Explicit await db.commit() before qdrant_store.delete_document() — SQLite is authoritative; Qdrant orphan vectors acceptable on Qdrant failure
 - [Phase 02-document-ingestion-pipeline]: Files saved as {sha256_hash}{ext} in DATA_DIR/uploads/ — hash-based naming enables O(1) dedup check and easy cleanup on delete
 - [Phase 02-document-ingestion-pipeline]: qdrant-client 1.16.2 vs Qdrant server 1.13.4 version mismatch — upsert works (HTTP 200 confirmed) but versions are misaligned; pin qdrant-client==1.13.* or upgrade Docker image at Phase 3 start
+- [Phase 03-retrieval-engine]: Qdrant server upgraded to v1.16.3 (aligns with client 1.16.2); check_compatibility=False added to AsyncQdrantClient as belt-and-suspenders
+- [Phase 03-retrieval-engine]: encode_queries() used for query embedding (not encode()) — BGE-M3 applies query_max_length and query_instruction for retrieval queries
+- [Phase 03-retrieval-engine]: query_sparse() returns [] on empty indices — Qdrant server errors on empty SparseVector; early return is safer
+- [Phase 03-retrieval-engine]: query_points() API used (not legacy search()) — modern unified API in qdrant-client 1.16
 
 ### Pending Todos
 
-- Pin qdrant-client version to match Qdrant server 1.13.4 at Phase 3 start (or upgrade Docker image) — currently at 1.16.2, warning logged at runtime
+- None (Qdrant version mismatch resolved in 03-01)
 
 ### Blockers/Concerns
 
@@ -87,5 +92,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Phase 2 complete — 02-04-PLAN.md verified end-to-end (human checkpoint approved)
+Stopped at: Completed 03-01-PLAN.md — Qdrant v1.16.3 upgrade, encode_query(), query_dense(), query_sparse()
 Resume file: None
