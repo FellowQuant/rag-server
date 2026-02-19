@@ -1,344 +1,149 @@
 # Feature Landscape
 
 **Domain:** Financial/Quantitative Document RAG Server
-**Researched:** 2026-02-12
-**Confidence:** MEDIUM
+**Researched:** 2026-02-18 (updated with SOTA verification)
+**Confidence:** HIGH for table stakes (validated against requirements); MEDIUM for differentiators
+
+---
 
 ## Table Stakes
 
-Features users expect. Missing = product feels incomplete.
+Features users expect. Missing = product feels incomplete or broken.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| PDF ingestion | Primary source format for finance papers | Medium | Must handle multi-column layouts, not just text extraction |
-| Document CRUD operations | Can't manage corpus without basic lifecycle | Low | Add, list, delete documents via API |
-| Semantic search/retrieval | Core RAG capability | Medium | Vector embeddings + similarity search |
-| Chunk-level citations | Need to verify AI claims against source | Medium | Track source doc + page/section per chunk |
-| REST API | Standard programmatic access | Low | Document operations + query endpoint |
-| Index status tracking | Need to know when documents are queryable | Low | States: pending, processing, indexed, failed |
-| Local execution | Privacy requirement for proprietary research | Medium | No cloud API dependencies for core flow |
-| Query both chunks and answers | Different use cases need different outputs | Medium | Retrieve mode (raw chunks) vs Ask mode (LLM synthesis) |
+| PDF ingestion with layout preservation | Primary document format; dual-column academic papers and financial reports are standard | Medium | Requires Docling, not basic text extraction |
+| LaTeX formula preservation | Core content of quantitative papers; formulas as garbled text are useless | Medium | Docling formula model outputs LaTeX |
+| Financial table structure preservation | Correlation matrices, factor loadings lose meaning when cells are linearized | Medium | Table-as-atomic chunking required |
+| Semantic search | Core RAG capability | Low | BGE-M3 dense retrieval |
+| Chunk-level citations | Cannot verify claims without source document + page number | Medium | Metadata propagation through full pipeline |
+| Document CRUD | List, delete, re-ingest documents | Low | Standard API operations |
+| Index status tracking | pending/processing/indexed/failed — users need to know when docs are searchable | Low | Job queue with status polling |
+| Dual-mode queries | Retrieve (raw chunks) vs Ask (LLM-synthesized answer) | Medium | Two endpoints, same retrieval backend |
+| REST API | Programmatic access | Low | FastAPI |
+| Local-only execution | Privacy requirement for proprietary research | Medium | Ollama + local models, no cloud dependencies |
+
+---
 
 ## Differentiators
 
-Features that set product apart. Not expected, but valued.
+Features that set this system apart from generic RAG. Not universally expected, but high value.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| LaTeX formula preservation | Formulas as LaTeX not garbled text = 10x better comprehension | High | Requires LaTeX-aware parsing, not OCR |
-| Financial table structure preservation | Correlation matrices, factor loadings lose meaning when linearized | High | Need layout-aware parsing (e.g., RAGFlow DeepDoc) |
-| Jupyter notebook ingestion | Code + analysis together = complete context | Medium | Parse .ipynb, preserve cell structure and outputs |
-| Multi-column layout handling | Academic papers use dual-column; reading order matters | High | Column detection and proper text flow reconstruction |
-| Cross-document synthesis | Compare concepts across papers (e.g., "how do 3 authors define alpha?") | High | Requires agentic RAG patterns (PaperQA approach) |
-| LaTeX source ingestion | .tex files = ground truth for formulas and structure | Medium | Parsing .tex directly vs OCR from PDF |
-| Code block detection and preservation | Python implementations in papers need to stay as code | Medium | Syntax highlighting metadata, language detection |
-| MCP server integration | Native Claude Code integration = seamless workflow | Medium | Implements MCP resources + tools protocol |
-| Hybrid retrieval (semantic + keyword) | Dense math papers need both concept similarity and exact term matching | Medium | Combine vector search with BM25/full-text |
-| Figure caption extraction | Charts/diagrams context crucial for understanding | Medium | OCR + layout analysis to associate captions |
-| Citation graph tracking | "Which papers cite this formula?" for research exploration | High | Build document relationship graph |
-| Reranking for precision | Initial retrieval casts wide net; rerank for relevance | Medium | Two-stage retrieval with cross-encoder reranker |
+| Hybrid retrieval (BM25 + dense) | Catches both conceptual queries AND exact term matches (α, β, specific model names) | Medium | rank-bm25 + BGE-M3 dense + RRF fusion |
+| Cross-encoder reranking | 10-20% precision improvement over bi-encoder retrieval alone on BEIR benchmarks | Medium | Qwen3-Reranker-0.6B or jina-reranker-v3 |
+| Jupyter notebook ingestion | Code + analysis + outputs together; critical for quant research workflows | Medium | nbformat parser with cell-type filtering |
+| Multi-column layout handling | Academic finance papers use dual-column as standard; reading order matters | Medium | Docling DocLayNet model |
+| Code block detection and preservation | Python implementations in papers need to stay as code, not garbled prose | Low | Docling code block classifier |
+| MCP server integration | Native Claude Code integration; ingest and query without leaving the editor | Low | MCP Python SDK thin wrapper |
+| Formula context enrichment | Enables natural language queries to find formula chunks ("Sharpe ratio formula" finds `\frac{R_p - R_f}{\sigma_p}`) | Medium | Prepend surrounding text to formula embedding |
+| Async ingestion with progress | Docling is slow (4s/page); users need feedback without blocking | Low | Job queue returning job_id immediately |
+
+---
 
 ## Anti-Features
 
-Features to explicitly NOT build.
+Features to explicitly NOT build in v1.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|-----------|-------------------|
-| Web UI or dashboard | Adds complexity; not consumption pattern for v1 | REST API + MCP only; UI in separate project if needed later |
-| Cloud-hosted deployment | Privacy concerns for proprietary research; network latency | Local-first architecture with GPU acceleration |
-| Proprietary LLM API dependency | Cost, privacy, requires internet | Local LLM serving (Ollama, llama.cpp, vLLM) |
-| Real-time document watching/sync | Complexity of filesystem monitoring; YAGNI | Manual ingestion via API calls |
-| User authentication/multi-tenancy | Single-user local deployment | Simple or no auth for localhost-only API |
-| Document versioning | Complex; unclear use case for research corpus | Delete + re-ingest if document updated |
-| Fine-tuning custom embeddings | High complexity, marginal gains over SOTA models | Use best available embedding model (Voyage, OpenAI, Nomic) |
-| OCR for scanned PDFs | Different problem domain; adds heavy dependencies | Require digital PDFs; flag scanned PDFs as unsupported |
-| Natural language document queries in API | Ambiguous; better done via MCP ask tool | Structured query params (filters, k-nearest, etc.) |
-| Export to other formats | Scope creep; retrieval is the job | Return chunks/answers as JSON; client handles rendering |
+| Web UI / dashboard | Adds frontend complexity; API-only consumption is the actual pattern (Claude Code, scripts) | REST API + MCP cover all use cases |
+| Cloud-hosted deployment | Privacy violation for proprietary quant research; introduces network latency | Local-only deployment |
+| Proprietary LLM APIs | Cost, privacy, internet dependency | Ollama with local models |
+| Real-time filesystem watching | Filesystem monitoring complexity; YAGNI | Manual API ingestion |
+| User authentication / multi-tenancy | Single-user local deployment; no threat model requiring auth | Optional localhost-only binding |
+| Document versioning | Complex; delete + re-ingest covers the use case | DELETE + POST ingest |
+| OCR for scanned PDFs | Different problem domain; assume digital PDFs | Scope note in docs |
+| GraphRAG / knowledge graph | Too expensive and complex for v1; 2025 research shows it underperforms on factual retrieval | Hybrid vector+BM25 retrieval |
+| Visual RAG (ColPali-style) | Additional complexity; text extraction is sufficient for v1 with good parsers | Evaluate in v2 if text extraction proves insufficient for figure-heavy reports |
+| Fine-tuning custom embeddings | High complexity; SOTA pretrained models (BGE-M3, Qwen3) already well above baseline | Use pretrained models as-is |
+| Real-time market data integration | Different system entirely; this is a research knowledge base | Separate concern |
+
+---
 
 ## Feature Dependencies
 
 ```
-Document Ingestion
-    ├──requires──> Index Status Tracking
-    ├──requires──> PDF Parsing
-    │   ├──requires──> Multi-column Layout Detection
-    │   ├──requires──> Table Structure Extraction
-    │   ├──requires──> LaTeX Formula Extraction
-    │   └──requires──> Code Block Detection
-    ├──requires──> LaTeX Source Parsing (for .tex files)
-    └──requires──> Jupyter Notebook Parsing (for .ipynb files)
+Qdrant + SQLite storage schema
+    └─> Document ingestion (Docling parser, chunker)
+        └─> Embedding model (BGE-M3)
+            └─> Semantic retrieval
+                └─> BM25 hybrid retrieval (adds sparse to dense)
+                    └─> Reranking (adds cross-encoder precision)
+                        └─> LLM synthesis (Ask mode)
+                            └─> MCP server (wraps all above)
 
-Semantic Search/Retrieval
-    ├──requires──> Vector Embedding Generation
-    ├──requires──> Vector Database/Index
-    └──enhances──> Chunk-level Citations
+Async job queue
+    └─> Document ingestion (job_id + status polling)
+        └─> MCP async ingest (depends on job queue being in place)
 
-Hybrid Retrieval
-    ├──requires──> Semantic Search
-    ├──requires──> Keyword Search (BM25/full-text)
-    └──requires──> Result Fusion
-
-Reranking
-    ├──requires──> Semantic Search (initial retrieval)
-    └──enhances──> Precision
-
-Cross-document Synthesis
-    ├──requires──> Semantic Search
-    ├──requires──> LLM Integration
-    ├──requires──> Chunk-level Citations
-    └──requires──> Multi-query Planning (agentic pattern)
-
-MCP Server
-    ├──requires──> REST API (or direct service layer)
-    ├──exposes──> Retrieve Tool (chunks)
-    ├──exposes──> Ask Tool (LLM answers)
-    └──exposes──> Document Management Tools (ingest, list, delete)
-
-Ask Mode (LLM Synthesis)
-    ├──requires──> Semantic Search
-    ├──requires──> Local LLM Serving
-    └──requires──> Chunk-level Citations
-
-Citation Graph Tracking
-    ├──requires──> Document Metadata Extraction
-    └──enhances──> Cross-document Synthesis
+Citation metadata schema
+    └─> (must be designed before everything else — flows through every stage)
 ```
 
-### Dependency Notes
-
-- **PDF Parsing → Multi-column/Table/Formula Extraction:** Layout-aware parsing is a single pipeline, not separate steps. Use integrated solution (RAGFlow DeepDoc, Marker).
-- **Hybrid Retrieval → Semantic + Keyword Search:** Requires both indexes; fusion algorithm (RRF or similar) to merge results.
-- **Cross-document Synthesis → Agentic Pattern:** Needs multi-step planning: generate subqueries, retrieve from multiple sources, synthesize. See PaperQA approach.
-- **MCP Server → REST API:** MCP tools can call REST endpoints or directly invoke service layer. Direct service layer = simpler, fewer layers.
-- **Ask Mode → Local LLM:** Could use cloud LLM initially for prototyping, but v1 requirement is local. Block on local LLM integration.
+---
 
 ## MVP Recommendation
 
-### Launch With (v1)
+Build in this order, validate each phase before proceeding:
 
-Minimum viable product — what's needed to validate the concept.
+**Phase 1 (Foundation):** Storage schema with full citation metadata. Qdrant + SQLite. This must be right before anything else is built.
 
-- [ ] **PDF ingestion with layout-aware parsing** — Marker or RAGFlow DeepDoc for multi-column, tables, formulas
-- [ ] **Document CRUD via REST API** — Add (POST /documents), list (GET /documents), delete (DELETE /documents/:id)
-- [ ] **Index status tracking** — Document states: pending → processing → indexed/failed
-- [ ] **Semantic search** — Vector embeddings (Voyage AI or Nomic Embed) + FAISS/Chroma/Qdrant
-- [ ] **Chunk-level citations** — Store source doc ID, page number, section heading per chunk
-- [ ] **MCP server with retrieve tool** — Expose search as MCP tool returning chunks with citations
-- [ ] **Hybrid retrieval (semantic + keyword)** — Combine vector search with BM25 for better recall on math terms
-- [ ] **Reranking** — Two-stage retrieval with cross-encoder for precision
-- [ ] **Local LLM serving** — Ollama or llama.cpp for answer generation
-- [ ] **MCP ask tool** — LLM-synthesized answers with citations
+**Phase 2 (Ingestion):** Docling parser + content-aware atomic chunker + BGE-M3 embedding. Test with real financial documents: dual-column paper, paper with formulas, paper with tables. Do not proceed until formula and table preservation is verified.
 
-**Why this MVP:**
-- Proves core value: accurate retrieval from complex financial documents
-- MCP integration = immediate Claude Code workflow value
-- Hybrid retrieval + reranking = quality baseline competitive with specialized systems
-- Local LLM = validates full self-contained operation
+**Phase 3 (Basic Retrieval):** Dense-only retrieval to validate end-to-end. Citations, document CRUD, retrieve endpoint. Confirm citation round-trip works.
 
-### Add After Validation (v1.x)
+**Phase 4 (LLM):** Ollama + ask endpoint + VRAM sequencing. Answer synthesis with inline citations.
 
-Features to add once core is working and validated with real usage.
+**Phase 5 (Hybrid Retrieval + Reranking):** BM25 + RRF fusion + cross-encoder reranker. Measure improvement on formula retrieval specifically.
 
-- [ ] **LaTeX source ingestion** — Parse .tex files directly (trigger: user has .tex sources, not just PDFs)
-- [ ] **Jupyter notebook ingestion** — Parse .ipynb files (trigger: notebooks are common in corpus)
-- [ ] **Cross-document synthesis** — Agentic multi-query pattern (trigger: users ask comparative questions)
-- [ ] **Figure caption extraction** — Associate chart/diagram context (trigger: users need visual context)
-- [ ] **Code block preservation metadata** — Language detection, syntax highlighting hints (trigger: code snippets important for corpus)
-- [ ] **MCP document management tools** — Ingest/delete via MCP not just REST (trigger: Claude Code wants to manage corpus)
+**Phase 6 (MCP):** Thin wrapper over Phase 3-5 logic. Async ingest tool. Retrieve and ask tools.
 
-### Future Consideration (v2+)
+**Phase 7 (Advanced Parsers):** LaTeX .tex and Jupyter .ipynb ingestion.
 
-Features to defer until product-market fit is established.
+**Deferred to v2:**
+- Visual RAG (ColFlor/ColQwen2) for figure-heavy reports
+- Cross-document synthesis (agentic multi-query patterns)
+- Citation graph tracking ("which papers reference this formula?")
+- RAPTOR hierarchical indexing for very long documents
 
-- [ ] **Citation graph tracking** — "Which papers reference this concept?" (defer: complex graph DB, unclear ROI)
-- [ ] **Query result caching** — Speed up repeated queries (defer: optimize when it's a bottleneck)
-- [ ] **Incremental re-indexing** — Update index without full rebuild (defer: corpus churn likely low initially)
-- [ ] **Custom chunking strategies per document type** — LaTeX vs PDF vs notebook chunking (defer: tune when default chunking shows clear gaps)
-- [ ] **Multi-lingual support** — Non-English papers (defer: English-only corpus initially)
-- [ ] **Audio/video ingestion** — Lecture recordings, webinars (defer: different problem, expand scope later)
+---
 
-## Feature Prioritization Matrix
+## Domain-Specific Feature Notes
 
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| PDF ingestion with layout parsing | HIGH | MEDIUM | P1 |
-| Semantic search | HIGH | MEDIUM | P1 |
-| Chunk-level citations | HIGH | MEDIUM | P1 |
-| REST API | HIGH | LOW | P1 |
-| Index status tracking | HIGH | LOW | P1 |
-| Hybrid retrieval | HIGH | MEDIUM | P1 |
-| Reranking | HIGH | MEDIUM | P1 |
-| MCP retrieve tool | HIGH | MEDIUM | P1 |
-| Local LLM serving | HIGH | MEDIUM | P1 |
-| MCP ask tool | HIGH | MEDIUM | P1 |
-| LaTeX source ingestion | MEDIUM | MEDIUM | P2 |
-| Jupyter notebook ingestion | MEDIUM | MEDIUM | P2 |
-| Cross-document synthesis | MEDIUM | HIGH | P2 |
-| Figure caption extraction | MEDIUM | MEDIUM | P2 |
-| Code block metadata | LOW | LOW | P2 |
-| MCP document management | MEDIUM | LOW | P2 |
-| Citation graph tracking | LOW | HIGH | P3 |
-| Query caching | MEDIUM | LOW | P3 |
-| Incremental re-indexing | LOW | MEDIUM | P3 |
-| Custom chunking strategies | MEDIUM | HIGH | P3 |
+### Quantitative Finance Document Types
 
-**Priority key:**
-- P1: Must have for launch (validates core value)
-- P2: Should have, add when MVP validated
-- P3: Nice to have, future consideration
+The system must handle these document types well:
+1. **Academic papers** (arXiv, SSRN, Journal of Finance): dual-column, dense formulas, Greek-letter variables, citations
+2. **Quant strategy research** (internal research notes): single-column, heavy Python code, performance tables, Sharpe/drawdown statistics
+3. **Jupyter notebooks**: mixed code + prose + output tables; execution order matters
+4. **LaTeX source files**: ground-truth formula extraction without PDF rendering artifacts
 
-## Comparative Analysis
+### Finance-Specific Retrieval Challenges
 
-### Specialized Financial RAG vs Generic RAG
+- **Exact symbol queries:** "alpha" (generic word) vs "alpha" (factor model intercept) vs `\alpha` (LaTeX). BM25 is essential for disambiguation.
+- **Formula name lookup:** "Black-Scholes" should retrieve both the formula `C = S_0 N(d_1) - K e^{-rT} N(d_2)` AND the surrounding explanation.
+- **Table queries:** "correlation between SPY and GLD" should retrieve the correlation matrix where that value appears, including headers.
+- **Cross-paper concept queries:** "momentum premium" should retrieve chunks across multiple papers discussing the same factor.
 
-| Feature | Generic RAG (LangChain/LlamaIndex) | Financial Document RAG (This Project) |
-|---------|-------------------------------------|----------------------------------------|
-| PDF parsing | Simple text extraction | Layout-aware: multi-column, tables, formulas |
-| Formula handling | Text or OCR (garbled) | LaTeX preservation |
-| Table extraction | Linearized or lost | Structure preserved (rows/cols/headers) |
-| Code blocks | Plain text | Detected, language-tagged |
-| Citations | Document-level or none | Page-level + section headings |
-| Retrieval | Semantic only | Hybrid (semantic + keyword) for math terms |
-| LLM integration | Cloud APIs | Local models (privacy) |
-| Interface | Python library | REST API + MCP (Claude Code integration) |
+### FinMTEB Research Implications
 
-### MCP Server Patterns
+The FinMTEB benchmark (EMNLP 2025) reveals:
+1. Domain-specialized models (Fin-E5, FinBERT) outperform general models on financial STS tasks by 15+ percentage points.
+2. General MTEB performance is a **poor predictor** of financial domain performance.
+3. BoW models (BM25) surprisingly outperform dense embeddings on financial STS tasks — this validates the hybrid retrieval approach.
 
-Based on MCP documentation research:
+**Implication for this project:** The BGE-M3 + BM25 hybrid approach directly addresses the FinMTEB finding. If retrieval quality remains insufficient for financial-specific queries, Fin-E5 (fine-tuned e5-Mistral-7B on financial synthetic data) is the upgrade path — but requires 7B-param VRAM budget.
 
-**MCP Resources** (expose data):
-- List indexed documents as resources
-- Each document = resource with URI `doc://[id]`
-- Clients can subscribe to document updates (resource change notifications)
-- Resource annotations: priority (importance), audience (user/assistant), lastModified
-
-**MCP Tools** (expose actions):
-- `retrieve` tool: Search corpus, return chunks with citations
-- `ask` tool: Search + LLM synthesis, return answer with citations
-- `ingest_document` tool: Add document to corpus (if MCP document management added)
-- `delete_document` tool: Remove document from corpus
-- `list_documents` tool: Get corpus inventory with indexing status
-
-**MCP Best Practices** (from protocol docs):
-- Tools use JSON Schema for input validation
-- Return structured content + text fallback for compatibility
-- Use resource links to point to full documents from tool results
-- Implement listChanged notifications when corpus changes
-- Human-in-the-loop: clients should confirm tool invocations (especially delete/ingest)
-
-## Implementation Notes
-
-### LaTeX Formula Preservation
-
-**Challenge:** PDFs render formulas as glyphs; need to recover LaTeX source.
-
-**Solutions:**
-- **Marker**: Detects LaTeX in PDFs, extracts as `$...$` or `$$...$$` markdown
-- **LaTeX source parsing**: Parse .tex files directly (ground truth)
-- **OCR + LaTeX**: Tools like pix2tex (image to LaTeX) — expensive, lower accuracy
-
-**Recommendation:** Marker for PDF extraction, add .tex parsing as P2 feature.
-
-### Table Structure Preservation
-
-**Challenge:** Tables as image regions or fragmented text lose semantic structure.
-
-**Solutions:**
-- **RAGFlow DeepDoc**: Vision model detects tables, extracts structure
-- **Marker**: Table detection + markdown table output
-- **Table Transformer**: Hugging Face model for table structure recognition
-
-**Recommendation:** Marker first (simpler), RAGFlow DeepDoc if Marker tables insufficient.
-
-### Multi-column Layout Handling
-
-**Challenge:** Dual-column academic papers read left-to-right across columns (wrong) if not detected.
-
-**Solutions:**
-- **Layout detection models**: Detectron2-based layout models
-- **Marker**: Includes column detection
-- **RAGFlow DeepDoc**: Vision-based layout analysis
-
-**Recommendation:** Marker includes this; verify quality with sample papers.
-
-### Hybrid Retrieval
-
-**Challenge:** Semantic search misses exact math terms; keyword search misses concepts.
-
-**Solutions:**
-- **Dual indexes**: Vector (FAISS/Chroma) + full-text (Elasticsearch/Tantivy/BM25)
-- **Fusion**: Reciprocal Rank Fusion (RRF) to merge results
-- **Libraries**: LangChain has hybrid retrieval, LlamaIndex too
-
-**Recommendation:** Implement RRF over vector + BM25. Tantivy for Rust-based BM25 (fast), or Python BM25Okapi (simple).
-
-### Reranking
-
-**Challenge:** Initial retrieval (top-100) casts wide net; rerank top-20 for precision.
-
-**Solutions:**
-- **Cross-encoders**: Encode query + chunk together (vs bi-encoder embeddings)
-- **Models**: `ms-marco-MiniLM-L-12-v2` (fast), `bge-reranker-large` (accurate)
-- **Libraries**: sentence-transformers, LlamaIndex rerankers
-
-**Recommendation:** Use cross-encoder reranker; minimal latency for top-100 → top-10 rerank.
-
-### Local LLM Serving
-
-**Challenge:** Answer synthesis needs LLM; must run locally for privacy.
-
-**Solutions:**
-- **Ollama**: Simplest, good for prototyping (runs Llama, Mistral, etc.)
-- **llama.cpp**: Fast inference, low-level control
-- **vLLM**: Production-grade serving, OpenAI-compatible API
-- **TGI (Text Generation Inference)**: Hugging Face serving
-
-**Recommendation:** Ollama for MVP (ease of use), vLLM for production (performance, batching).
-
-### MCP Integration
-
-**Challenge:** Expose retrieve + ask as MCP tools for Claude Code.
-
-**Solutions:**
-- **MCP SDK**: TypeScript or Python SDK from Anthropic
-- **Protocol**: JSON-RPC over stdio or HTTP
-- **Tool definitions**: JSON Schema for inputs, structured outputs
-
-**Recommendation:** Python MCP SDK (aligns with Python RAG stack). Stdio transport for local use.
-
-### Cross-document Synthesis
-
-**Challenge:** "Compare how 3 authors define momentum" requires multi-query planning.
-
-**Solutions:**
-- **PaperQA approach**: Generate subqueries per paper, retrieve, synthesize
-- **Agentic RAG**: LLM plans queries, retrieves, self-critiques, repeats if needed
-- **Libraries**: PaperQA (research-specific), LangChain agents, LlamaIndex agents
-
-**Recommendation:** Defer to P2. When implemented, adapt PaperQA patterns (MIT license). Generate "For paper X, retrieve definition of Y" subqueries, aggregate answers.
-
-## Confidence Assessment
-
-| Feature Category | Confidence | Source |
-|------------------|------------|--------|
-| MCP capabilities | HIGH | Official MCP protocol docs (modelcontextprotocol.io) |
-| RAG best practices | MEDIUM | Anthropic Cookbook (official examples), training data |
-| PDF parsing solutions | MEDIUM | Training data on Marker/RAGFlow (no official docs accessed) |
-| Hybrid retrieval | HIGH | Standard RAG practice (training data + Anthropic Cookbook patterns) |
-| Local LLM serving | HIGH | Common practice (Ollama/vLLM well-documented) |
-| Financial domain specifics | MEDIUM | Training data on quant finance document structure |
-
-**Verification needed:**
-- Marker vs RAGFlow DeepDoc capability comparison (need hands-on testing or detailed benchmarks)
-- Table extraction quality across solutions (empirical evaluation required)
-- LaTeX formula extraction accuracy from PDFs (test with sample corpus)
+---
 
 ## Sources
 
-- MCP Protocol Documentation: https://modelcontextprotocol.io/docs (Resources, Tools)
-- Anthropic Cookbooks: https://github.com/anthropics/anthropic-cookbook (RAG patterns, PDF processing, embeddings)
-- Training data: RAG architectures, financial document parsing, hybrid retrieval strategies
-
----
-*Feature research for: FellowQuant RAG Server*
-*Researched: 2026-02-12*
+- [FinMTEB: Finance Massive Text Embedding Benchmark](https://arxiv.org/abs/2502.10990) — Domain specialization importance, BoW outperforms dense on financial STS
+- [FinMTEB Leaderboard](https://huggingface.co/spaces/FinanceMTEB/FinMTEB) — Fin-E5 top performing model
+- [Assessing RAG on Financial Documents (ACL 2025)](https://aclanthology.org/2025.finnlp-2.9.pdf) — 0.91 factual accuracy vs 0.44 multi-document synthesis
+- [MultiFinRAG framework](https://arxiv.org/abs/2506.20821) — Multimodal RAG for financial QA
+- [RAG for financial filings (FinSage)](https://arxiv.org/html/2504.14493v2) — Multi-aspect retrieval for 10-K/10-Q
+- [RAPTOR for RAG](https://arxiv.org/html/2401.18059v1) — Hierarchical indexing for long documents
+- [Advanced RAG optimization strategies](https://medium.com/@joycebirkins/6-advanced-rag-optimization-strategies-analysis-of-14-key-research-papers-f12329975009) — Agentic chunking, contextual retrieval survey

@@ -1,239 +1,187 @@
-# Pitfalls Research
+# Domain Pitfalls
 
 **Domain:** Financial Document RAG Server
-**Researched:** 2026-02-12
-**Confidence:** MEDIUM (based on known RAG failure modes for technical documents)
+**Researched:** 2026-02-18 (updated with SOTA verification)
+**Confidence:** HIGH for pitfalls verified by 2025 research; MEDIUM for inferred pitfalls
+
+---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Naive Chunking Destroys Financial Tables and Formulas
+Mistakes that cause rewrites or make the system fundamentally non-functional.
 
-**What goes wrong:**
-Fixed-size text chunking (e.g., 512 tokens) splits formulas mid-expression ("where α =" in one chunk, "0.05 and β = 0.12" in the next), separates table headers from data rows, and breaks multi-line equations. Retrieved chunks become meaningless fragments.
+### Pitfall 1: Fixed-Size Chunking Destroys Formulas and Tables
 
-**Why it happens:**
-Default LangChain/LlamaIndex text splitters don't understand document structure. They see text as a character stream, not as a document with semantic units (formulas, tables, code blocks).
+**What goes wrong:** Using token-count chunking (e.g., 512 or 1024 tokens) splits LaTeX formulas mid-expression, breaks table rows away from headers, and cuts code blocks. Retrieved chunks are semantically meaningless fragments.
 
-**How to avoid:**
-- Use format-aware chunking that treats formulas (`$...$`, `$$...$$`), tables, and code blocks as atomic units
-- Split on section/paragraph boundaries, not character counts
-- Keep tables whole (or split by logical row groups, never mid-row)
-- Test chunking quality with sample documents before scaling
+**Why it happens:** Default chunking strategies from LangChain/LlamaIndex/most tutorials use fixed-size windows. They work for prose text. They catastrophically fail for structured scientific content.
 
-**Warning signs:**
-- Retrieved chunks contain half-formulas or orphaned table rows
-- LLM answers reference "equation X" but the equation is split across chunks
-- Search for a known formula returns garbage
+**Consequences:** Query "Black-Scholes formula" returns a chunk ending with `C = S_0 N(d_1) -` with the rest of the formula in the adjacent chunk — both returned without context. The LLM cannot synthesize a complete answer. Users lose trust immediately.
 
-**Phase to address:**
-Phase 2 (Ingestion Pipeline) — chunking strategy is a core design decision
+**Prevention:** Content-aware atomic chunking (ARCHITECTURE.md Pattern 1). Parse into typed blocks first (text, formula, table, code). Treat formula/table/code blocks as atomic units — one chunk each, never split. Split text blocks on semantic or paragraph boundaries.
+
+**Detection:** Test with a paper containing multi-line equations (e.g., any factor model paper). Search for "pricing formula" and verify the returned chunk contains the complete formula. If it's truncated, chunking is broken.
 
 ---
 
-### Pitfall 2: PDF Parser Can't Handle Dual-Column Academic Layouts
+### Pitfall 2: PDF Parser Fails on Dual-Column Academic Layout
 
-**What goes wrong:**
-Simple text extraction reads across column boundaries instead of down each column. Result: sentences from left and right columns interleave, creating nonsensical text. This is catastrophic for dual-column papers (standard in academic finance).
+**What goes wrong:** Simple text extractors (PyPDF2, pdfplumber, basic pdfminer) read across columns left-to-right instead of top-to-bottom per column. Words from left column and right column interleave into nonsensical text: "asset The pricing risk-adjusted model CAPM return states assumes that..."
 
-**Why it happens:**
-Most PDF text extraction (PyPDF2, pdfplumber) extracts text by position on page, left-to-right, top-to-bottom. They don't detect column boundaries.
+**Why it happens:** PDF text objects have X/Y coordinates. A naive extractor reads by Y position (row by row) instead of by column regions. This is the default behavior for most basic PDF libraries.
 
-**How to avoid:**
-- Use layout-aware parser (Marker, RAGFlow DeepDoc) that detects column structure
-- Validate with dual-column sample papers (e.g., any academic finance paper)
-- Test reading order: does extracted text make sense when read sequentially?
+**Consequences:** Every academic paper (which uses dual-column layout as standard in journals) is corrupted at parse time. The entire indexing pipeline is built on garbage. No retrieval approach can fix garbled source text.
 
-**Warning signs:**
-- Extracted text from academic papers reads as gibberish
-- Sentences suddenly switch topics mid-line (column bleed)
-- Parser works fine on single-column books but fails on papers
+**Prevention:** Use Docling as primary parser — it uses DocLayNet (a layout detection model trained on academic papers) that correctly identifies column regions and reading order. Validated: OmniDocBench (CVPR 2025) shows layout-aware parsers significantly outperform text-extraction-only parsers on multi-column documents. Marker is also layout-aware but less accurate on complex layouts.
 
-**Phase to address:**
-Phase 2 (Ingestion Pipeline) — parser selection and validation
+**Detection:** Parse a dual-column finance paper (e.g., any Journal of Finance paper). Check the first paragraph of the markdown output. If sentences make sense, parsing is correct. If words are interleaved from both columns, parser is failing.
 
 ---
 
-### Pitfall 3: Embedding Model Doesn't Understand Mathematical Notation
+### Pitfall 3: Embedding Models Cannot Semantically Retrieve Formulas
 
-**What goes wrong:**
-General-purpose embedding models (e.g., all-MiniLM-L6-v2) treat LaTeX notation as random tokens. Query "Black-Scholes formula" doesn't match the chunk containing `$C = S_0 N(d_1) - K e^{-rT} N(d_2)$` because the model can't bridge natural language descriptions to mathematical notation.
+**What goes wrong:** A user queries "What is the formula for the Sharpe ratio?" The chunk containing `S = \frac{R_p - R_f}{\sigma_p}` is not retrieved because standard embedding models tokenize LaTeX notation as random subword tokens with no semantic meaning.
 
-**Why it happens:**
-Most embedding models are trained primarily on natural language text, not mathematical notation. LaTeX tokens are out-of-vocabulary or poorly represented.
+**Why it happens:** Models like BGE, E5, and most sentence-transformers were trained on natural language corpora. LaTeX syntax is present but sparse. The model cannot bridge "Sharpe ratio" (query) to `\frac{R_p - R_f}{\sigma_p}` (chunk content).
 
-**How to avoid:**
-- Include natural language descriptions alongside formulas during chunking (e.g., "The Black-Scholes formula: $C = ...$")
-- Use embedding models with scientific/technical training (SPECTER, SciBERT, or BGE with appropriate fine-tuning)
-- Add metadata search alongside semantic search: tag chunks with topic keywords during ingestion
-- Hybrid retrieval (BM25 + vector) partially mitigates this — keyword search catches "Black-Scholes" even if embeddings miss it
+**Consequences:** The primary use case — retrieving quantitative formulas from research papers — silently fails. Retrieval scores are low, reranker may also miss it, and the LLM either hallucinates the formula or says "I cannot find it."
 
-**Warning signs:**
-- Queries about specific formulas return unrelated chunks
-- Natural language questions work but formula-specific queries fail
-- Retrieval precision drops significantly for mathematical queries
+**Prevention (two-layer approach):**
+1. **Formula context enrichment:** During chunking, prepend surrounding text (section title + paragraph description) to the formula chunk's embedding text. The actual LaTeX is stored for display, but the embedding includes natural language context. This is the primary mitigation.
+2. **BM25 hybrid retrieval:** BM25 keyword search on the chunk's natural language context will catch "Sharpe ratio" if that phrase appears in the surrounding text.
+3. **Research validation:** SSEmb (2025, ARQMath-3 benchmark) confirms combining structural + semantic approaches outperforms either alone by >5 points on formula retrieval. However, SSEmb uses graph-based structural encoding beyond what we implement — our mitigation is a pragmatic subset that avoids the complexity of full formula graph embedding.
 
-**Phase to address:**
-Phase 3 (Retrieval) — embedding model selection and hybrid search implementation
+**Detection:** Index a paper with named formulas. Query "Sharpe ratio formula". If the correct chunk is not in top-5, formula retrieval is failing. Measure recall@5 on a small labeled set of formula queries before declaring Phase 3 complete.
 
 ---
 
-### Pitfall 4: Local LLM VRAM Conflicts with Embedding Model
+### Pitfall 4: VRAM Exhaustion During Concurrent Operations
 
-**What goes wrong:**
-Both the embedding model and the LLM need GPU VRAM. Running Marker (GPU-accelerated) + embedding model + LLM simultaneously exceeds available VRAM. Server crashes with CUDA OOM errors or falls back to CPU (10-100x slower).
+**What goes wrong:** Running document parsing (Docling with GPU-accelerated formula model), embedding generation (BGE-M3), and LLM inference (Ollama/vLLM) simultaneously on the same GPU exceeds available VRAM. Server crashes with CUDA OOM errors or falls back to CPU (10-100x slower for LLM).
 
-**Why it happens:**
-Each component loads independently and doesn't know about others' VRAM usage. Marker alone can use 4-8GB. An embedding model uses 1-4GB. A 7B LLM uses 4-8GB (quantized). Total can easily exceed 16-24GB VRAM.
+**Why it happens:** Each component loads its own model weights into VRAM:
+- Docling formula model: ~1-2GB during ingestion
+- BGE-M3 embedding: ~0.9GB
+- Ollama 7B Q4: ~4-5GB
+- Total simultaneous: ~7-8GB on a single GPU
 
-**How to avoid:**
-- Sequence operations: don't run ingestion (Marker + embeddings) and LLM inference simultaneously
-- Use CPU for embedding (sentence-transformers supports CPU, still fast enough for batch embedding)
-- Use quantized LLM (Q4/Q5 reduces VRAM by 50-70%)
-- Profile VRAM usage of each component and plan allocation
-- Consider Ollama's model loading/unloading (loads model on demand, frees when idle)
+**Consequences:** Server instability. Either ingestion or query serving breaks at random. CPU fallback for LLM makes responses take minutes. CUDA errors are non-deterministic and hard to debug.
 
-**Warning signs:**
-- Intermittent CUDA OOM errors
-- Server works fine for queries OR ingestion but crashes when both happen
-- Performance degrades severely under concurrent load
+**Prevention:** Enforce operation sequencing via the job queue (ARCHITECTURE.md Pattern 6). Ingestion (parsing + embedding) runs in background; LLM inference runs only for active queries. These never execute simultaneously. Profile actual VRAM usage during Phase 4 with selected model sizes.
 
-**Phase to address:**
-Phase 4 (LLM Integration) — VRAM budget planning
+**Detection:** Submit a large document for ingestion, then immediately query the system. Monitor `nvidia-smi` during overlap. If VRAM spikes above 90% or errors appear in logs, sequencing is not working.
 
 ---
 
-### Pitfall 5: Citation Provenance Lost During Processing
+### Pitfall 5: Citation Provenance Lost During Ingestion Pipeline
 
-**What goes wrong:**
-After parsing → chunking → embedding, chunks lose their connection to source document, page number, and section. When the system returns a chunk, it can't tell you where it came from. Users can't verify claims against the original source.
+**What goes wrong:** By the time chunks reach the vector store, they have lost their connection to the source document, page number, and section heading. The system can retrieve relevant text but cannot tell the user where it came from.
 
-**Why it happens:**
-Metadata gets dropped during processing pipeline. Parser extracts text but doesn't track page numbers. Chunker splits text but doesn't preserve section headers. Vector store stores embeddings but not the full metadata chain.
+**Why it happens:** Multi-stage pipelines (parse → chunk → embed → store) often treat each stage as a pure transformation. If metadata is not explicitly threaded through every stage, it gets dropped. Vector stores (especially ChromaDB in basic usage) store vectors with minimal metadata.
 
-**How to avoid:**
-- Design metadata schema upfront: every chunk carries (document_id, page_number, section_header, paragraph_index)
-- Parser must output structured objects with position metadata, not raw text
-- Chunker must propagate metadata from parser output
-- Vector store must support metadata storage and filtering (ChromaDB, Qdrant both support this)
-- Test end-to-end: ingest a doc, retrieve a chunk, verify citation points to correct source location
+**Consequences:** System is functionally useless for research purposes. Users cannot verify claims against source documents, cannot cite papers, cannot audit the retrieval. The core requirement ("citations trace back to exact sources") is violated.
 
-**Warning signs:**
-- Retrieved chunks have no source information
-- Citations are wrong (wrong page, wrong document)
-- Can't filter search by document or section
+**Prevention:** Design the metadata schema upfront in Phase 1 (ARCHITECTURE.md Pattern 5). Every processing stage must accept and return the full metadata object. The vector store must store metadata alongside vectors. Test end-to-end citation round-trip before Phase 3 is complete.
 
-**Phase to address:**
-Phase 1 (Foundation) — metadata schema design; Phase 2 (Ingestion) — metadata propagation
+**Detection:** Ingest a document. Retrieve a chunk. Verify that the returned chunk includes document_id, page_number, and section_header that correctly identify where the chunk came from in the original PDF.
 
 ---
 
 ### Pitfall 6: MCP Server Blocks on Long Operations
 
-**What goes wrong:**
-MCP tool calls for ingestion or complex queries block the MCP server. Claude Code appears frozen, can't cancel, no progress feedback. User thinks the system crashed.
+**What goes wrong:** The MCP `ingest_document` tool call synchronously parses and indexes a 30-page PDF. Docling at 4 seconds/page = 120 seconds. The MCP server is blocked. Claude Code appears frozen. The user has no progress feedback and cannot cancel.
 
-**Why it happens:**
-MCP tools are expected to return relatively quickly. Long operations (PDF parsing: 30-60s, LLM synthesis: 10-30s) block the tool call response. No built-in streaming or progress mechanism in basic MCP tool pattern.
+**Why it happens:** MCP tools are expected to return within a few seconds. The stdio transport does not support streaming partial results by default. Treating ingest as synchronous is a natural mistake.
 
-**How to avoid:**
-- Make ingestion async: MCP ingest tool returns immediately with job_id, separate tool to check status
-- Use streaming for LLM synthesis if MCP transport supports it
-- Set reasonable timeouts and return partial results if needed
-- Keep retrieve tool fast (< 2s) by optimizing retrieval pipeline
+**Consequences:** Poor user experience. For longer documents, the connection may timeout. Users may resubmit the same document multiple times, causing duplicate indexing.
 
-**Warning signs:**
-- Claude Code times out waiting for MCP tool response
-- User can't use Claude Code during ingestion
-- Large documents cause MCP connection to drop
+**Prevention:** Async ingestion pattern (ARCHITECTURE.md Pattern 6). `ingest_document` MCP tool immediately returns a `job_id`. A separate `get_job_status` tool polls for completion. Processing runs in a background thread/process.
 
-**Phase to address:**
-Phase 6 (MCP Server) — async patterns for long operations
+**Detection:** Submit a 20+ page PDF via MCP. Verify that `ingest_document` returns within 2 seconds with a job_id. Verify `get_job_status` transitions through pending → processing → indexed.
 
 ---
 
-## Technical Debt Patterns
+## Moderate Pitfalls
 
-| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|----------------|-----------------|
-| Skip hybrid search, semantic only | Simpler pipeline, faster launch | Lower retrieval quality for exact-term queries | MVP with < 20 docs, plan to add BM25 later |
-| Skip reranking | One less model to manage, lower latency | Retrieval precision is worse for complex queries | MVP; add when retrieval quality complaints arise |
-| Hardcode embedding model | No config complexity | Can't swap models without code changes | Never — always make model configurable |
-| Use Ollama instead of vLLM | Simpler setup, easier model management | Slower inference, no batching | Development and early production; switch to vLLM when latency matters |
-| Store chunks as files (not DB) | No database dependency | Can't query metadata, no transactional integrity | Never — use SQLite at minimum |
-| Skip LaTeX/notebook parsers | Ship faster (PDF only) | Users with .tex or .ipynb can't use the system | MVP — add as v1.x features when requested |
+### Pitfall 7: Financial Table Misidentification
 
-## Integration Gotchas
+**What goes wrong:** Correlation matrices, factor loading tables, and performance attribution tables are parsed as plain text instead of structured tables. Column alignment is lost. "0.87 0.23 -0.45" becomes meaningless without the row/column headers.
 
-| Integration | Common Mistake | Correct Approach |
-|-------------|----------------|------------------|
-| Ollama | Assuming model is loaded and warm | Check if model is available (`ollama list`), pre-pull on startup, handle cold-start latency |
-| ChromaDB | Not persisting to disk | Always specify `persist_directory`. Default is in-memory (data lost on restart) |
-| Marker | Running without GPU | Marker works on CPU but 5-10x slower. Verify CUDA availability on startup |
-| sentence-transformers | First-run model download | Models download from HuggingFace on first use. Cache in known location. Handle offline mode |
-| MCP stdio transport | Writing to stdout (interferes with MCP protocol) | Use stderr for logging, never print to stdout. MCP uses stdout for JSON-RPC |
-| FastAPI + async | Blocking calls in async handlers | Use `run_in_executor` for CPU-bound operations (embedding, parsing). Don't block event loop |
+**Prevention:** Verify Docling's table extraction quality specifically on financial tables before shipping Phase 2. Docling's TableFormer model achieves 97.9% accuracy on general tables, but financial tables with many decimal values and merged cells may differ. Test with actual correlation matrices from fund fact sheets or academic papers. If accuracy is insufficient, the table chunker needs to handle the specific failure modes.
 
-## Performance Traps
+### Pitfall 8: Embedding Model License Mismatch
 
-| Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| Embedding one chunk at a time | Ingestion takes minutes for one document | Batch embed chunks (encode multiple at once) | > 10 pages per document |
-| No vector index (brute force search) | Retrieval gets slower linearly with corpus size | Use HNSW index (ChromaDB default). Tune ef_search | > 10K chunks |
-| Loading LLM for every query | 5-10s cold start per query | Keep LLM loaded in memory (Ollama does this automatically) | Always — never reload per query |
-| Storing full document text in vector DB | Vector DB bloated, slow to load | Store only chunks in vector DB. Full text in metadata DB or filesystem | > 50 documents |
-| Re-parsing already indexed documents | Wasted compute on re-ingestion | Track document hash (SHA256). Skip if hash matches existing | > 20 documents |
+**What goes wrong:** A model selected for its benchmark performance (e.g., NV-Embed-v2, Cohere embeddings) has a license that prohibits the intended use case. The project builds on a model it cannot legally use in production.
 
-## Security Mistakes
+**Prevention:** Verify license before selecting any model. Verified:
+- BGE-M3: MIT — fully permissive
+- Qwen3-Embedding: Apache 2.0 — fully permissive
+- stella_en_400M_v5: MIT — fully permissive
+- jina-reranker-v3: CC BY-NC 4.0 — non-commercial only; check project status
+- Qwen3-Reranker: Apache 2.0 — fully permissive
+- NV-Embed-v2: NVIDIA Research license — check terms before production use
 
-| Mistake | Risk | Prevention |
-|---------|------|------------|
-| Exposing REST API on 0.0.0.0 without auth | Anyone on network can query your research corpus | Bind to 127.0.0.1 (localhost only). Add API key if network access needed |
-| Storing proprietary documents in world-readable paths | IP exposure | Use restricted file permissions (700). Don't put in /tmp |
-| Logging full query text and results | Sensitive research queries in log files | Minimal logging. Don't log query text or result content in production |
-| LLM prompt injection via document content | Malicious PDF could inject instructions into LLM context | Sanitize retrieved chunks before LLM prompt. Treat document content as untrusted data |
+### Pitfall 9: ChromaDB Cannot Support Multi-Vector Retrieval
 
-## "Looks Done But Isn't" Checklist
+**What goes wrong:** Starting with ChromaDB for simplicity, then discovering it does not support BGE-M3's sparse vectors or multi-vector (late interaction) retrieval. Full migration to Qdrant required at Phase 5 after data is already indexed.
 
-- [ ] **PDF Parsing:** Test with dual-column papers, not just single-column books — verify column detection
-- [ ] **Table Extraction:** Test with correlation matrices and multi-header tables — verify structure preserved
-- [ ] **Formula Extraction:** Test with inline ($...$) and display ($$...$$) formulas — verify LaTeX output
-- [ ] **Citation Accuracy:** Retrieve a chunk, check if cited page number matches original document
-- [ ] **Hybrid Search:** Query a specific term (e.g., "VWAP") — verify BM25 catches it even if embeddings miss
-- [ ] **LLM Answers:** Ask about a specific topic, verify answer cites correct sources (not hallucinated citations)
-- [ ] **MCP Integration:** Test from actual Claude Code, not just curl — verify tool discovery and invocation works
-- [ ] **Concurrent Operations:** Ingest a document while querying — verify no VRAM crashes or data corruption
-- [ ] **Large Documents:** Test with 500+ page book — verify ingestion completes and chunks are queryable
+**Prevention:** Use Qdrant from the start (Phase 1). The multi-vector capability of BGE-M3 and any future ColPali-style visual retrieval both require a vector store that supports multi-vector payloads and MaxSim scoring. Qdrant supports this natively. ChromaDB does not.
 
-## Recovery Strategies
+### Pitfall 10: Docling Is Slow for Batch Ingestion
 
-| Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| Naive chunking destroyed data | MEDIUM | Re-ingest all documents with new chunking strategy. Existing data must be discarded |
-| Wrong embedding model | MEDIUM | Re-embed all chunks with new model. Vector store must be rebuilt. Metadata preserved |
-| Citation metadata lost | HIGH | Must re-design metadata schema and re-ingest everything. If parser didn't track positions, parser must change too |
-| VRAM conflicts | LOW | Reconfigure to time-share GPU or use CPU for embeddings. No data loss |
-| MCP blocking | LOW | Refactor to async pattern. No data loss, just API design change |
-| Column detection failure | MEDIUM | Switch parser (Marker → RAGFlow DeepDoc). Re-ingest affected documents |
+**What goes wrong:** Docling processes ~4 seconds per page. A 100-document corpus with 20 pages average = 2,000 pages = ~133 minutes of ingestion time. This is acceptable for background processing but must be planned for.
 
-## Pitfall-to-Phase Mapping
+**Prevention:** Run ingestion as background jobs (Pattern 6). Provide clear status tracking. Consider batching documents rather than one-at-a-time ingestion. Marker (0.12s/page) can serve as a fast-path fallback for text-only PDFs where formula/table complexity is low.
 
-| Pitfall | Prevention Phase | Verification |
-|---------|-----------------|--------------|
-| Naive chunking | Phase 2 (Ingestion) | Test chunks from sample financial documents contain complete formulas/tables |
-| Column detection | Phase 2 (Ingestion) | Parse 3+ dual-column papers, verify text reads correctly |
-| Embedding model mismatch | Phase 3 (Retrieval) | Query known formulas, verify relevant chunks retrieved |
-| VRAM conflicts | Phase 4 (LLM Integration) | Run ingestion + query concurrently, monitor VRAM |
-| Citation provenance | Phase 1 (Foundation) + Phase 2 | End-to-end: ingest → retrieve → verify citation accuracy |
-| MCP blocking | Phase 6 (MCP Server) | Ingest large PDF via MCP, verify Claude Code stays responsive |
+---
+
+## Minor Pitfalls
+
+### Pitfall 11: Jupyter Notebook Output Cells Create Noise
+
+**What goes wrong:** Notebook output cells containing large DataFrames, matplotlib figure text, or long tracebacks are indexed as chunks, polluting retrieval results with non-informative content.
+
+**Prevention:** Filter output cells by type during nbformat parsing. Include: markdown cells, code cells, short text outputs. Exclude: error tracebacks, raw bytes, large data outputs (>500 chars). This is a heuristic that needs tuning with actual notebooks.
+
+### Pitfall 12: Reranker Latency Blows Retrieval Budget
+
+**What goes wrong:** Running a cross-encoder reranker on 50 candidates with 200-token average chunk length takes 2-4 seconds on CPU, breaking the <2s retrieve endpoint target.
+
+**Prevention:** Load reranker on GPU (even the 0.6B models benefit significantly). Keep candidate set to 20-30 for the reranker, not 50. Cache reranker results for repeated identical (query, chunk_id) pairs. Profile during Phase 5.
+
+### Pitfall 13: BM25 Index Out of Sync with Vector Store
+
+**What goes wrong:** A document is deleted from the vector store but the BM25 in-memory index still contains its chunks. BM25 returns hits for deleted documents; citation resolution fails.
+
+**Prevention:** Maintain BM25 index as a derived artifact rebuilt from SQLite chunk table on startup. When a document is deleted, update SQLite first, then rebuild BM25 index. Treat BM25 index as ephemeral (no separate persistence needed for <500 doc corpus).
+
+---
+
+## Phase-Specific Warnings
+
+| Phase Topic | Likely Pitfall | Mitigation |
+|-------------|---------------|------------|
+| Phase 1: Storage schema | Metadata fields added later break existing indexes | Define complete ChunkMetadata schema in Phase 1 even if not all fields are populated yet |
+| Phase 2: PDF ingestion | Dual-column academic papers | Use Docling with DocLayNet; test with real arXiv papers |
+| Phase 2: Formula chunking | LaTeX split mid-expression | Implement atomic chunking before any other chunking logic |
+| Phase 2: Table extraction | Financial table column alignment lost | Test with correlation matrices and factor loading tables specifically |
+| Phase 3: Formula retrieval | Formula chunks not retrieved by natural language queries | Formula context enrichment mandatory; measure recall@5 before shipping |
+| Phase 4: VRAM | OOM errors when ingestion + LLM overlap | Job queue enforces sequencing; never parallel |
+| Phase 5: Reranker | Latency >2s on CPU | Load on GPU; cap candidate set at 20-30 |
+| Phase 5: BM25 | Index staleness after document deletion | Rebuild from SQLite on startup; treat as ephemeral |
+| Phase 6: MCP | Synchronous ingest blocks Claude Code | Async job queue must be in place before MCP |
+| Phase 7: LaTeX .tex parsing | plasTeX fails on complex real-world LaTeX packages | Use pylatexenc for focused formula extraction; do not attempt full document rendering |
+
+---
 
 ## Sources
 
-- Training data on RAG system failure modes and best practices (up to Jan 2025)
-- Known issues with PDF parsing for academic/financial documents
-- Common VRAM management challenges with local LLM deployments
-- MCP protocol documentation patterns
-- **Note:** Unable to verify against 2026 sources. Pitfalls are based on established patterns that remain relevant.
-
----
-*Pitfalls research for: Financial Document RAG Server*
-*Researched: 2026-02-12*
+- [OmniDocBench CVPR 2025](https://github.com/opendatalab/OmniDocBench) — Multi-column layout parsing accuracy measurements
+- [PDF Data Extraction Benchmark 2025](https://procycons.com/en/blogs/pdf-data-extraction-benchmark/) — Docling vs Marker vs Unstructured table accuracy
+- [SSEmb formula retrieval 2025](https://arxiv.org/abs/2508.04162) — Formula retrieval via structural+semantic approaches
+- [Vision-guided chunking](https://arxiv.org/abs/2506.16035) — Multi-page table and complex structure chunking
+- [Chunking strategies evaluation](https://arxiv.org/abs/2504.19754) — Comparative evaluation of chunking approaches
+- [Hybrid retrieval RRF](https://ragaboutit.com/hybrid-retrieval-for-enterprise-rag-when-to-use-bm25-vectors-or-both/) — BM25+dense hybrid best practices
+- [FinMTEB benchmark](https://arxiv.org/abs/2502.10990) — Finance domain embedding model evaluation
+- [RAG for financial documents (ACL 2025)](https://aclanthology.org/2025.finnlp-2.9.pdf) — RAG system capabilities on financial documents
+- [jina-reranker-v3 license](https://huggingface.co/jinaai/jina-reranker-v3) — CC BY-NC 4.0 non-commercial
