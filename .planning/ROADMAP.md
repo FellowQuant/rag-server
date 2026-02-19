@@ -9,7 +9,7 @@ This roadmap delivers a specialized RAG system for quantitative finance research
 - **Embedding:** BGE-M3 — unique three-mode output (dense + sparse + multi-vector) enabling full hybrid retrieval
 - **Vector store:** Qdrant (local Docker) — required for BGE-M3 multi-vector and future ColFlor visual retrieval
 - **Reranker:** Qwen3-Reranker-0.6B (Apache 2.0) — ~61 BEIR nDCG@10, Qwen3 stack cohesion
-- **LLM:** vLLM (local GPU, OpenAI-compatible) | llama.cpp (local CPU/GGUF) | AWS Bedrock (cloud fallback) — provider-swappable via llm.yaml
+- **LLM:** vLLM (local GPU, OpenAI-compatible) | llama.cpp (local CPU/GGUF) | AWS Bedrock (cloud fallback via boto3 standard credential chain) — provider-swappable via llm.yaml
 - **Hybrid retrieval:** BM25 + BGE-M3 dense + BGE-M3 sparse, fused via Reciprocal Rank Fusion
 
 ## Phases
@@ -122,10 +122,12 @@ Plans:
   4. User can POST to retrieve endpoint with query and receive ranked chunks with citations
   5. User can POST to ask endpoint with query and receive LLM-synthesized answer with citations
   6. User can GET status of a specific document by ID to check indexing progress
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] TBD
+- [ ] 05-01-PLAN.md — API infrastructure: /api/v1 prefix, middleware (CORS, logging, upload size limit), RFC 7807 error handlers
+- [ ] 05-02-PLAN.md — document_ids filter on RetrievalEngine + QdrantStore + new POST /api/v1/retrieve endpoint
+- [ ] 05-03-PLAN.md — End-to-end verification script (scripts/verify_api.py) covering all API-01 through API-06
 
 ### Phase 6: MCP Server
 **Goal**: Claude Code can manage documents and query knowledge base via MCP protocol
@@ -154,5 +156,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Document Ingestion Pipeline | 4/4 | Complete   | 2026-02-19 |
 | 3. Retrieval Engine | 4/4 | Complete   | 2026-02-19 |
 | 4. LLM Integration | 3/4 | In Progress|  |
-| 5. REST API | 0/TBD | Not started | - |
+| 5. REST API | 0/3 | Not started | - |
 | 6. MCP Server | 0/TBD | Not started | - |
