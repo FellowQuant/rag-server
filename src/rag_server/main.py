@@ -22,7 +22,10 @@ from fastapi import FastAPI
 from rag_server.config import get_settings
 from rag_server.database.engine import async_session, engine
 from rag_server.database.models import Base
+from rag_server.ingestion.embedder import Embedder
 from rag_server.retrieval.bm25_manager import BM25Manager
+from rag_server.retrieval.engine import RetrievalEngine
+from rag_server.retrieval.reranker import Reranker
 from rag_server.vector_store.qdrant import QdrantStore
 from rag_server.worker.manager import WorkerManager
 
@@ -119,6 +122,31 @@ async def lifespan(app: FastAPI):
         name="bm25-poll",
     )
 
+    # Load query-side BGE-M3 embedder in the FastAPI process.
+    # IMPORTANT: This is a SEPARATE instance from the worker process's embedder.
+    # The worker's instance lives in a different OS process (multiprocessing.spawn).
+    # FastAPI needs its own instance for query-time encode_query() calls.
+    query_embedder = Embedder()
+    await asyncio.to_thread(query_embedder.load)
+    logger.info("Query embedder (BGE-M3) loaded in FastAPI process")
+
+    # Load Qwen3-Reranker-0.6B in FastAPI process.
+    # VRAM: ~1.2 GB fp16. BGE-M3 worker uses ~1 GB in separate process.
+    # Shared GPU steady-state peak ~2.2 GB — monitor with nvidia-smi under load.
+    reranker = Reranker()
+    await asyncio.to_thread(reranker.load)
+    logger.info("Reranker (Qwen3-Reranker-0.6B) loaded in FastAPI process")
+
+    # Wire the RetrievalEngine from all loaded components.
+    retrieval_engine = RetrievalEngine(
+        embedder=query_embedder,
+        qdrant_store=qdrant_store,
+        bm25_manager=bm25_manager,
+        reranker=reranker,
+    )
+    app.state.retrieval_engine = retrieval_engine
+    logger.info("RetrievalEngine ready")
+
     logger.info("RAG Server started (DATA_DIR=%s)", settings.data_dir)
     yield
 
@@ -130,6 +158,11 @@ async def lifespan(app: FastAPI):
         pass
 
     worker_manager.stop()
+
+    # Unload retrieval models to free VRAM.
+    await asyncio.to_thread(reranker.unload)
+    await asyncio.to_thread(query_embedder.unload)
+
     await qdrant_store.close()
     await engine.dispose()
     logger.info("RAG Server shutdown complete")
@@ -138,7 +171,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="FellowQuant RAG Server",
     description="Document ingestion and retrieval for quantitative finance research",
-    version="0.2.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
