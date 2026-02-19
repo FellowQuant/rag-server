@@ -42,7 +42,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **API-01**: User can ingest documents via POST endpoint with file upload
 - [x] **API-02**: User can list all documents with metadata and indexing status via GET endpoint
 - [x] **API-03**: User can delete documents and their associated chunks/embeddings via DELETE endpoint
-- [ ] **API-04**: User can query the knowledge base via retrieve endpoint returning ranked chunks with citations
+- [x] **API-04**: User can query the knowledge base via retrieve endpoint returning ranked chunks with citations
 - [x] **API-05**: User can query the knowledge base via ask endpoint returning LLM-synthesized answers with citations
 - [x] **API-06**: User can check document indexing status via status endpoint
 
@@ -119,7 +119,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | API-01 | Phase 5 | Complete |
 | API-02 | Phase 5 | Complete |
 | API-03 | Phase 5 | Complete |
-| API-04 | Phase 5 | Pending |
+| API-04 | Phase 5 | Complete |
 | API-05 | Phase 5 | Complete |
 | API-06 | Phase 5 | Complete |
 | MCP-01 | Phase 6 | Pending |

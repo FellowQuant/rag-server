@@ -156,5 +156,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. Document Ingestion Pipeline | 4/4 | Complete   | 2026-02-19 |
 | 3. Retrieval Engine | 4/4 | Complete   | 2026-02-19 |
 | 4. LLM Integration | 3/4 | In Progress|  |
-| 5. REST API | 1/3 | In Progress|  |
+| 5. REST API | 2/3 | In Progress|  |
 | 6. MCP Server | 0/TBD | Not started | - |

@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Core value:** Accurate retrieval and synthesis from dense quantitative finance documents — tables stay as tables, formulas stay as formulas, and citations trace back to exact sources.
-**Current focus:** Phase 5 - Retrieval API (Phase 4 complete)
+**Current focus:** Phase 6 - Deployment (Phase 5 complete)
 
 ## Current Position
 
 Phase: 5 of 6 (REST API)
-Plan: 1 of 2 (05-01 complete)
-Status: Phase 5 in progress (1/2 plans complete)
-Last activity: 2026-02-19 — 05-01-PLAN.md complete (URL versioning /api/v1, CORS/Logging/UploadSizeLimit middleware stack, RFC 7807 error handlers, version 0.5.0)
+Plan: 2 of 2 (05-02 complete — Phase 5 DONE)
+Status: Phase 5 complete (2/2 plans complete) — ready for Phase 6
+Last activity: 2026-02-19 — 05-02-PLAN.md complete (POST /api/v1/retrieve, document_ids scoping, retrieve schemas, QdrantStore query_filter)
 
-Progress: [██████████] 94% (17 of 18 plans complete)
+Progress: [██████████] 100% (18 of 18 plans complete)
 
 ## Performance Metrics
 
@@ -37,6 +37,8 @@ Progress: [██████████] 94% (17 of 18 plans complete)
 - Trend: N/A (4 recent data points)
 
 *Updated after each plan completion*
+
+| Phase 05-rest-api P02 | 2 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -107,6 +109,9 @@ Recent decisions affecting current work:
 - [Phase 05-rest-api]: UploadSizeLimitMiddleware reads Content-Length header only, not body — rejects oversized uploads pre-read for memory efficiency
 - [Phase 05-rest-api]: LoggingMiddleware never consumes response body — SSE streaming passes through unmodified
 - [Phase 05-rest-api]: type(m).__name__ on app.user_middleware returns 'Middleware' (Starlette namedtuple); actual class accessible via m.cls.__name__
+- [Phase 05-rest-api]: query_filter=None default on QdrantStore methods — Qdrant ignores None natively, no branching needed in query_dense/query_sparse
+- [Phase 05-rest-api]: document_ids=None default on RetrievalEngine.search() — /ask endpoint remains fully backward compatible
+- [Phase 05-rest-api]: BM25 post-filter after asyncio.gather — BM25 corpus is global, manual post-filter required since Qdrant payload filter cannot apply to keyword search
 
 ### Pending Todos
 
@@ -123,5 +128,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 05-01-PLAN.md — URL versioning /api/v1, CORS/Logging/UploadSizeLimit middleware, RFC 7807 error handlers, version 0.5.0.
+Stopped at: Completed 05-02-PLAN.md — POST /api/v1/retrieve, document_ids scoping for retrieval, QdrantStore query_filter, Phase 5 REST API complete.
 Resume file: None
