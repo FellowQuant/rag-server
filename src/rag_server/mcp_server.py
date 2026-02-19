@@ -6,12 +6,15 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.fastmcp.exceptions import ToolError
+from sqlalchemy import select
 
 from rag_server.config import get_settings
 from rag_server.database.engine import async_session
+from rag_server.database.models import Document
 from rag_server.ingestion.embedder import Embedder
 from rag_server.llm.config import get_llm_settings
 from rag_server.llm.provider import create_provider
@@ -237,6 +240,140 @@ async def ask(
             ],
             "note": "LLM unavailable — raw chunks returned",
         }
+
+
+@mcp.tool()
+async def list_documents(ctx: Context) -> dict:
+    """List all documents in the knowledge base with metadata and indexing status.
+
+    Returns full metadata for each document including id, filename, title,
+    status (pending/indexing/indexed/indexed_partial/failed), page_count, and created_at.
+    MCP server must be restarted after new documents are indexed via the REST API
+    for BM25 keyword search to reflect newly added documents.
+
+    Returns:
+        dict with 'documents' (list of document metadata dicts) and 'total' count.
+    """
+    async with async_session() as session:
+        result = await session.execute(
+            select(Document).order_by(Document.created_at.desc())
+        )
+        docs = result.scalars().all()
+
+    return {
+        "documents": [
+            {
+                "id": d.id,
+                "filename": d.filename,
+                "title": d.title,
+                "status": d.status,
+                "file_format": d.file_format,
+                "file_size": d.file_size,
+                "page_count": d.page_count,
+                "created_at": d.created_at.isoformat() if d.created_at else None,
+                "indexed_at": d.indexed_at.isoformat() if d.indexed_at else None,
+            }
+            for d in docs
+        ],
+        "total": len(docs),
+    }
+
+
+@mcp.tool()
+async def get_document(document_id: str, ctx: Context) -> dict:
+    """Get metadata for a specific document by ID.
+
+    Returns document metadata only — no chunk list. Use the retrieve tool
+    with document_ids=[id] to search within a specific document.
+
+    Args:
+        document_id: UUID of the document to retrieve.
+
+    Returns:
+        dict with full document metadata.
+
+    Raises:
+        ToolError: NOT_FOUND: <document_id> if no document with that ID exists.
+    """
+    async with async_session() as session:
+        result = await session.execute(
+            select(Document).where(Document.id == document_id)
+        )
+        doc = result.scalar_one_or_none()
+
+    if doc is None:
+        raise ToolError(f"NOT_FOUND: {document_id}")
+
+    return {
+        "id": doc.id,
+        "filename": doc.filename,
+        "title": doc.title,
+        "author": doc.author,
+        "status": doc.status,
+        "file_format": doc.file_format,
+        "file_size": doc.file_size,
+        "file_hash": doc.file_hash,
+        "page_count": doc.page_count,
+        "error_msg": doc.error_msg,
+        "created_at": doc.created_at.isoformat() if doc.created_at else None,
+        "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
+        "indexed_at": doc.indexed_at.isoformat() if doc.indexed_at else None,
+    }
+
+
+@mcp.tool()
+async def delete_document(document_id: str, ctx: Context) -> dict:
+    """Delete a document and all associated data from the knowledge base.
+
+    Removes:
+    1. Uploaded file from DATA_DIR/uploads/ (if present)
+    2. SQLite Document record (CASCADE deletes all Chunk rows)
+    3. Qdrant vectors filtered by document_id (failure non-fatal — orphaned
+       vectors don't appear in search results once document is removed from SQLite)
+
+    Args:
+        document_id: UUID of the document to delete.
+
+    Returns:
+        dict with 'deleted': true and 'document_id' on success.
+
+    Raises:
+        ToolError: NOT_FOUND: <document_id> if no document with that ID exists.
+    """
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+
+    async with async_session() as session:
+        result = await session.execute(
+            select(Document).where(Document.id == document_id)
+        )
+        doc = result.scalar_one_or_none()
+
+        if doc is None:
+            raise ToolError(f"NOT_FOUND: {document_id}")
+
+        settings = get_settings()
+        uploads_dir = settings.data_dir / "uploads"
+        suffix = f".{doc.file_format}"
+        file_path = uploads_dir / f"{doc.file_hash}{suffix}"
+        if file_path.exists():
+            file_path.unlink()
+            logger.info("MCP delete_document: deleted file %s", file_path)
+
+        await session.delete(doc)
+        await session.commit()
+        logger.info("MCP delete_document: deleted SQLite record %s", document_id)
+
+    # Delete Qdrant vectors — failure is non-fatal (orphaned vectors are invisible)
+    try:
+        await app_ctx.qdrant_store.delete_document(document_id)
+        logger.info("MCP delete_document: deleted Qdrant vectors for %s", document_id)
+    except Exception as exc:
+        logger.warning(
+            "MCP delete_document: Qdrant delete failed (non-fatal) for %s: %s",
+            document_id, exc,
+        )
+
+    return {"deleted": True, "document_id": document_id}
 
 
 if __name__ == "__main__":
