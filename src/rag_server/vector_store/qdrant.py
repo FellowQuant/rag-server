@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from qdrant_client import AsyncQdrantClient  # NOT QdrantClient — sync causes deadlocks in FastAPI
@@ -20,6 +21,14 @@ logger = logging.getLogger(__name__)
 
 # Dense embedding dimension for BGE-M3
 DENSE_DIM = 1024
+
+
+@dataclass
+class VectorSearchResult:
+    """Single result from dense or sparse Qdrant search."""
+    chunk_id: str           # UUID matching SQLite chunks.id
+    score: float            # Cosine similarity (dense) or dot product (sparse)
+    payload: dict           # document_id, chunk_type, page_number, section_heading, chunk_index
 
 
 class QdrantStore:
@@ -142,6 +151,78 @@ class QdrantStore:
             "segments_count": info.segments_count,
             "status": info.status,
         }
+
+    async def query_dense(
+        self,
+        dense_vector: list[float],
+        limit: int = 50,
+    ) -> list[VectorSearchResult]:
+        """Search collection by dense (cosine) vector similarity.
+
+        Args:
+            dense_vector: 1024-dimensional BGE-M3 dense embedding for the query.
+            limit: Maximum number of results to return (use candidate pool size,
+                   e.g. 50, not final top_k — reranker narrows to top_k later).
+
+        Returns:
+            List of VectorSearchResult sorted by score descending.
+        """
+        result = await self._client.query_points(
+            collection_name=self._collection,
+            query=dense_vector,
+            using="dense",
+            limit=limit,
+            with_payload=True,
+            with_vectors=False,
+        )
+        return [
+            VectorSearchResult(
+                chunk_id=str(p.id),
+                score=p.score,
+                payload=p.payload or {},
+            )
+            for p in result.points
+        ]
+
+    async def query_sparse(
+        self,
+        sparse_indices: list[int],
+        sparse_values: list[float],
+        limit: int = 50,
+    ) -> list[VectorSearchResult]:
+        """Search collection by sparse (learned term weight) vector similarity.
+
+        Args:
+            sparse_indices: BGE-M3 lexical weight token IDs (raw ints).
+            sparse_values: Corresponding lexical weight floats.
+            limit: Maximum number of results to return.
+
+        Returns:
+            List of VectorSearchResult sorted by score descending.
+            Returns empty list if sparse_indices is empty (avoids Qdrant error
+            on empty sparse vector).
+        """
+        if not sparse_indices:
+            return []
+
+        from qdrant_client.models import SparseVector
+
+        result = await self._client.query_points(
+            collection_name=self._collection,
+            query=SparseVector(indices=sparse_indices, values=sparse_values),
+            using="sparse",
+            limit=limit,
+            with_payload=True,
+            with_vectors=False,
+        )
+        return [
+            VectorSearchResult(
+                chunk_id=str(p.id),
+                score=p.score,
+                payload=p.payload or {},
+            )
+            for p in result.points
+        ]
 
     async def close(self) -> None:
         """Close the underlying HTTP client."""

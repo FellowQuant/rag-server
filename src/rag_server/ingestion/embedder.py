@@ -39,6 +39,14 @@ class EmbeddingResult:
     sparse_values: list[float]      # Corresponding lexical weight floats
 
 
+@dataclass
+class QueryEmbedding:
+    """Dense + sparse vectors for a single query string, ready for Qdrant search."""
+    dense_vector: list[float]       # 1024-dimensional float list
+    sparse_indices: list[int]       # BGE-M3 lexical weight token IDs (raw ints)
+    sparse_values: list[float]      # Corresponding lexical weight floats
+
+
 class Embedder:
     """Stateful BGE-M3 embedder. Instantiate once per worker process.
 
@@ -135,3 +143,46 @@ class Embedder:
 
         logger.debug("Embedder: embedded %d chunks", len(results))
         return results
+
+    def encode_query(self, query: str) -> QueryEmbedding:
+        """Embed a single query string using BGE-M3 query mode.
+
+        Uses encode_queries() (not encode()) — applies query_max_length and
+        any query_instruction_for_retrieval if set on the model. This is
+        semantically correct for retrieval (queries vs passages differ in
+        BGE-M3's training).
+
+        IMPORTANT: This is synchronous and GPU-bound. Call via
+        asyncio.to_thread() from async code to avoid blocking the event loop.
+
+        Args:
+            query: Plain text query string.
+
+        Returns:
+            QueryEmbedding with dense_vector (1024d) and sparse indices/values.
+        """
+        if self._model is None:
+            raise RuntimeError("Embedder.load() must be called before encode_query()")
+
+        if not query.strip():
+            return QueryEmbedding(
+                dense_vector=[0.0] * DENSE_DIM,
+                sparse_indices=[],
+                sparse_values=[],
+            )
+
+        output = self._model.encode_queries(
+            [query],
+            return_dense=True,
+            return_sparse=True,
+            return_colbert_vecs=False,
+        )
+        dense_vec: list[float] = output["dense_vecs"][0].tolist()
+        raw: dict[int, float] = output["lexical_weights"][0]
+        # CRITICAL: raw keys are int token IDs — use directly as Qdrant sparse
+        # indices. Do NOT call convert_id_to_token() (returns strings, incompatible).
+        return QueryEmbedding(
+            dense_vector=dense_vec,
+            sparse_indices=list(raw.keys()),
+            sparse_values=list(raw.values()),
+        )
