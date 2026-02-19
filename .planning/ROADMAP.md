@@ -106,9 +106,9 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Dependencies (openai, boto3, sse-starlette, tenacity, pyyaml) + llm.yaml config + LLMSettings + LLMProvider ABC + API schemas
-- [ ] 04-02-PLAN.md — Concrete providers: VLLMProvider + LlamaCppProvider (AsyncOpenAI) + BedrockProvider (boto3 + asyncio.to_thread)
-- [ ] 04-03-PLAN.md — SynthesisEngine: prompt assembly, token budget (tiktoken), citation parsing (lenient regex), tenacity retry
+- [x] 04-01-PLAN.md — Dependencies (openai, boto3, sse-starlette, tenacity, pyyaml) + llm.yaml config + LLMSettings + LLMProvider ABC + API schemas
+- [x] 04-02-PLAN.md — Concrete providers: VLLMProvider + LlamaCppProvider (AsyncOpenAI) + BedrockProvider (boto3 + asyncio.to_thread)
+- [x] 04-03-PLAN.md — SynthesisEngine: prompt assembly, token budget (tiktoken), citation parsing (lenient regex), tenacity retry
 - [ ] 04-04-PLAN.md — POST /ask endpoint (SSE streaming + non-streaming) + lifespan wiring + smoke test
 
 ### Phase 5: REST API
@@ -153,6 +153,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Foundation & Storage | 3/3 | Complete    | 2026-02-18 |
 | 2. Document Ingestion Pipeline | 4/4 | Complete   | 2026-02-19 |
 | 3. Retrieval Engine | 4/4 | Complete   | 2026-02-19 |
-| 4. LLM Integration | 1/4 | In Progress|  |
+| 4. LLM Integration | 3/4 | In Progress|  |
 | 5. REST API | 0/TBD | Not started | - |
 | 6. MCP Server | 0/TBD | Not started | - |

@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-13)
 ## Current Position
 
 Phase: 4 of 6 (LLM Integration)
-Plan: 2 of 4 (04-02 complete)
-Status: Phase 4 in progress (2/4 plans complete)
-Last activity: 2026-02-19 — 04-02-PLAN.md complete (Three concrete LLM providers: VLLMProvider, LlamaCppProvider via AsyncOpenAI, BedrockProvider via boto3 Converse API wrapped in asyncio.to_thread)
+Plan: 3 of 4 (04-03 complete)
+Status: Phase 4 in progress (3/4 plans complete)
+Last activity: 2026-02-19 — 04-03-PLAN.md complete (SynthesisEngine with tiktoken token budget, lenient citation parsing, fallback source attribution, and tenacity retry for complete() and stream() provider calls)
 
-Progress: [██████████] 78% (14 of 18 plans complete)
+Progress: [██████████] 83% (15 of 18 plans complete)
 
 ## Performance Metrics
 
@@ -96,6 +96,10 @@ Recent decisions affecting current work:
 - [Phase 04-llm-integration]: Bedrock streaming is batch-then-yield — ConverseStream event iteration is synchronous, runs entirely inside asyncio.to_thread; tokens arrive all at once after model finishes (acceptable for cloud fallback)
 - [Phase 04-llm-integration]: LlamaCppProvider is a separate class from VLLMProvider despite identical implementation — explicit class for logs, future parameter divergence (n_predict, grammar), and factory clarity
 - [Phase 03-retrieval-engine]: Chunk content fetched from SQLite via bulk JOIN after RRF, before reranker — content lives only in SQLite, never in Qdrant payload
+- [Phase 04-llm-integration]: stream_synthesize() uses manual retry loop (not AsyncRetrying) — Python async generators cannot yield inside a context manager; manual loop is idiomatic
+- [Phase 04-llm-integration]: Token budget always keeps at least 1 chunk — prevents empty context block when single chunk exceeds budget
+- [Phase 04-llm-integration]: Citation suffix matching fallback after exact match — handles path-prefix variations like 'doc.pdf' vs '/data/uploads/doc.pdf'
+- [Phase 04-llm-integration]: parse_result() fallback includes all input chunks as sources when 0 citations found — never return empty sources when answer exists
 
 ### Pending Todos
 
@@ -112,5 +116,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 04-02-PLAN.md — Three concrete LLM providers: VLLMProvider, LlamaCppProvider via AsyncOpenAI, BedrockProvider via boto3 Converse API wrapped in asyncio.to_thread.
+Stopped at: Completed 04-03-PLAN.md — SynthesisEngine with tiktoken token budget, lenient citation parsing with fallback, tenacity retry for complete()/stream() provider calls.
 Resume file: None
