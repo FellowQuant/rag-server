@@ -52,8 +52,10 @@ uv run alembic upgrade head
 **5. Start the server**
 
 ```bash
-uv run uvicorn rag_server.main:app --port 8001
+./scripts/start.sh
 ```
+
+This sets `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` (prevents CUDA memory fragmentation stalls), binds to `0.0.0.0:8001` with hot-reload, and tees logs to `.logs/rag_server.log`.
 
 ## REST API
 
