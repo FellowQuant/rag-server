@@ -1,0 +1,277 @@
+{
+  "info": {
+    "name": "FellowQuant RAG Server",
+    "description": "FellowQuant RAG Server API — document ingestion, retrieval, and LLM synthesis for quantitative finance research documents.\n\nSet the `base_url` collection variable to your server address (default: http://localhost:8001).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8001",
+      "type": "string"
+    },
+    {
+      "key": "document_id",
+      "value": "",
+      "description": "Set this after uploading a document (copy the id from the upload response)",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/health",
+            "description": "Returns {\"status\": \"ok\"} when the server is running."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Documents",
+      "item": [
+        {
+          "name": "Upload document",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/documents",
+            "description": "Upload a PDF, .tex, or .ipynb file for ingestion. Indexing runs in the background — use the returned `id` to poll status.\n\nReplace the `src` path with your local file.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "/path/to/your/paper.pdf",
+                  "description": "PDF, LaTeX (.tex), or Jupyter notebook (.ipynb)"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "202 Accepted",
+              "status": "Accepted",
+              "code": 202,
+              "body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"status\": \"pending\",\n  \"filename\": \"paper.pdf\",\n  \"file_size\": 1048576,\n  \"file_format\": \"pdf\",\n  \"created_at\": \"2026-02-19T10:00:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "List documents",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/documents",
+            "description": "Returns all documents with their metadata and indexing status.\n\nStatus values: `pending` | `indexing` | `indexed` | `indexed_partial` | `failed`"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"documents\": [\n    {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"status\": \"indexed\",\n      \"filename\": \"paper.pdf\",\n      \"file_format\": \"pdf\",\n      \"file_size\": 1048576,\n      \"page_count\": 42,\n      \"created_at\": \"2026-02-19T10:00:00Z\",\n      \"indexed_at\": \"2026-02-19T10:02:00Z\"\n    }\n  ],\n  \"total\": 1\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get document status",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/documents/{{document_id}}",
+            "description": "Get metadata and indexing status for a specific document. Use this to poll after upload until `status` is `indexed`."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"status\": \"indexed\",\n  \"filename\": \"paper.pdf\",\n  \"file_format\": \"pdf\",\n  \"file_size\": 1048576,\n  \"page_count\": 42,\n  \"error_msg\": null,\n  \"created_at\": \"2026-02-19T10:00:00Z\",\n  \"updated_at\": \"2026-02-19T10:02:00Z\",\n  \"indexed_at\": \"2026-02-19T10:02:00Z\"\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"type\": \"about:blank\",\n  \"title\": \"Not Found\",\n  \"status\": 404,\n  \"detail\": \"Document 550e8400-e29b-41d4-a716-446655440000 not found\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete document",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/api/v1/documents/{{document_id}}",
+            "description": "Delete a document and all associated data: uploaded file, SQLite record, chunks, and Qdrant vectors."
+          },
+          "response": [
+            {
+              "name": "204 No Content",
+              "status": "No Content",
+              "code": 204,
+              "body": ""
+            },
+            {
+              "name": "404 Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"type\": \"about:blank\",\n  \"title\": \"Not Found\",\n  \"status\": 404,\n  \"detail\": \"Document 550e8400-e29b-41d4-a716-446655440000 not found\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Query",
+      "item": [
+        {
+          "name": "Retrieve — global search",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/retrieve",
+            "description": "Hybrid search across all indexed documents. Returns reranked chunks with full citation metadata and retrieval scores (BM25, dense, sparse, RRF, reranker).",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"Sharpe ratio under non-normal returns\",\n  \"top_k\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"query\": \"Sharpe ratio under non-normal returns\",\n  \"results\": [\n    {\n      \"chunk_id\": \"uuid\",\n      \"document_id\": \"uuid\",\n      \"chunk_index\": 12,\n      \"content\": \"The Sharpe ratio assumes normally distributed returns...\",\n      \"display_content\": null,\n      \"source_filename\": \"paper.pdf\",\n      \"page_number\": 7,\n      \"section_heading\": \"2.3 Risk-Adjusted Performance\",\n      \"chunk_type\": \"text\",\n      \"bm25_score\": 0.82,\n      \"dense_score\": 0.91,\n      \"sparse_score\": 0.74,\n      \"rrf_score\": 0.067,\n      \"reranker_score\": 0.88\n    }\n  ],\n  \"total_candidates\": 47\n}"
+            }
+          ]
+        },
+        {
+          "name": "Retrieve — scoped to documents",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/retrieve",
+            "description": "Search within specific documents only. Pass one or more document IDs in `document_ids`.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"Kelly criterion fractional betting\",\n  \"top_k\": 5,\n  \"document_ids\": [\"{{document_id}}\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Retrieve — with min_score threshold",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/retrieve",
+            "description": "Only return chunks with a reranker score above `min_score`. Useful for high-precision queries where low-quality matches are not useful.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mean-variance optimization constraints\",\n  \"top_k\": 10,\n  \"min_score\": 0.5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Ask — streaming (SSE)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/ask",
+            "description": "Full RAG: retrieves chunks and synthesizes an answer with the LLM. Returns a Server-Sent Events stream.\n\nEvents:\n- `event: token` — incremental answer text\n- `event: done` — final JSON `{answer, sources}`\n- `event: error` — error message\n\nNote: Postman does not display SSE streams interactively. Use `curl` or the non-streaming variant for testing.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "text/event-stream"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"What is the Kelly criterion and how does it apply to position sizing?\",\n  \"top_k\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Ask — non-streaming (JSON)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/ask?streaming=false",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "ask"],
+              "query": [
+                {
+                  "key": "streaming",
+                  "value": "false"
+                }
+              ]
+            },
+            "description": "Same as the streaming endpoint but waits for full LLM completion and returns a single JSON response. Easier to inspect in Postman.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"What is the Kelly criterion and how does it apply to position sizing?\",\n  \"top_k\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"answer\": \"The Kelly criterion determines the optimal fraction of capital to bet... [Source: paper.pdf, p.12]\",\n  \"sources\": [\n    {\n      \"filename\": \"paper.pdf\",\n      \"page_number\": 12,\n      \"section_heading\": \"3.1 Position Sizing\",\n      \"chunk_type\": \"text\"\n    }\n  ]\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
