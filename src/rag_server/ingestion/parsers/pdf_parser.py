@@ -49,6 +49,61 @@ def _normalize_text(text: str) -> str:
     return unicodedata.normalize("NFKC", text)
 
 
+def _patch_pdf_hyperlink() -> None:
+    """Make PdfHyperlink.uri accept any string, skipping strict URL format validation.
+
+    Pydantic v2 compiles parent-model validators at class-definition time with
+    an inlined copy of each nested model's schema. Replacing PdfHyperlink with
+    a subclass has no effect on already-compiled parent validators — the old
+    schema is still used.
+
+    The correct approach is to modify the ORIGINAL class in-place:
+    1. Change model_fields['uri'] annotation to str | None (accepts any string)
+    2. Call model_rebuild(force=True) on PdfHyperlink to recompile its schema
+    3. Rebuild all BaseModel subclasses in the same module so parent models
+       (e.g. DoclingPage) recompile with the updated PdfHyperlink schema
+
+    Problems handled:
+    - Bare URLs:     'www.deeplearningbook.org'     → accepted as plain string
+    - Spaces in URL: 'https://ssrn. com/abstract=N' → accepted as plain string
+    """
+    try:
+        from pydantic import BaseModel
+        from pydantic.fields import FieldInfo
+        import docling_core.types.doc.document as _dd
+
+        cls = _dd.PdfHyperlink
+
+        if "uri" not in cls.model_fields:
+            return
+
+        # Change uri to plain Optional[str] — no URL format validation
+        cls.model_fields["uri"] = FieldInfo(annotation=str | None, default=None)
+        cls.__annotations__["uri"] = str | None
+        cls.model_rebuild(force=True)
+
+        # Rebuild all BaseModel subclasses in the docling_core module so any
+        # parent model that has a list[PdfHyperlink] field recompiles its schema.
+        for _name in dir(_dd):
+            _obj = getattr(_dd, _name, None)
+            if (
+                isinstance(_obj, type)
+                and issubclass(_obj, BaseModel)
+                and _obj is not cls
+                and _obj is not BaseModel
+            ):
+                try:
+                    _obj.model_rebuild(force=True)
+                except Exception:
+                    pass
+
+        logger.info("PdfHyperlink patched — uri now accepts any string (no URL validation)")
+    except Exception as exc:
+        logger.warning("PdfHyperlink patch skipped: %s", exc)
+
+
+_patch_pdf_hyperlink()
+
 # Reduce CodeFormula model batch size to avoid CUDA OOM on consumer GPUs.
 # Default batch_size=5 requires ~18-20 GB VRAM; batch_size=2 reduces to ~8-10 GB.
 # Must be set before DocumentConverter is constructed (affects pipeline options).

@@ -1,5 +1,7 @@
 /data/
 /.logs/
+/.claude/
+/.planning/
 __pycache__/
 *.pyc
 *.pyo
