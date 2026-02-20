@@ -24,7 +24,7 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
-from rag_server.api.schemas import AskResponse, SourceItem
+from rag_server.api.schemas import AskResponse, CitationGroup, CitationPage, SourceItem
 from rag_server.llm.config import LLMConfig
 from rag_server.llm.provider import LLMProvider
 from rag_server.retrieval.models import ChunkResult
@@ -257,7 +257,30 @@ class SynthesisEngine:
         clean_answer = _SOURCES_SECTION_RE.sub("", answer).rstrip()
         clean_answer = _CITATION_STRIP_RE.sub("", clean_answer).strip()
 
-        return AskResponse(answer=clean_answer, citations=sources)
+        # Group citations by filename (first-cited order), pages sorted ascending.
+        groups: dict[str, list[SourceItem]] = {}
+        for item in sources:
+            groups.setdefault(item.filename, []).append(item)
+
+        citation_groups = [
+            CitationGroup(
+                filename=fname,
+                pages=sorted(
+                    [
+                        CitationPage(
+                            page_number=p.page_number,
+                            section_heading=p.section_heading,
+                            chunk_type=p.chunk_type,
+                        )
+                        for p in pages
+                    ],
+                    key=lambda p: p.page_number or 0,
+                ),
+            )
+            for fname, pages in groups.items()
+        ]
+
+        return AskResponse(answer=clean_answer, citations=citation_groups)
 
     # ------------------------------------------------------------------
     # LLM calls with retry

@@ -194,7 +194,7 @@ async def ask(
         min_score: Optional reranker score threshold (0.0-1.0).
 
     Returns:
-        dict with 'answer' (str or null), 'sources' (list of {filename, page}),
+        dict with 'answer' (str or null), 'citations' (list of {filename, pages}),
         and optionally 'note' when LLM is unavailable.
     """
     if top_k < 1 or top_k > 100:
@@ -225,8 +225,11 @@ async def ask(
         return {
             "answer": ask_response.answer,
             "citations": [
-                {"filename": s.filename, "page": s.page_number}
-                for s in ask_response.citations
+                {
+                    "filename": group.filename,
+                    "pages": [p.page_number for p in group.pages],
+                }
+                for group in ask_response.citations
             ],
         }
     except Exception as exc:

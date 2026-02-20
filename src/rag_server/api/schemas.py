@@ -53,14 +53,28 @@ class DocumentListResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 class SourceItem(BaseModel):
-    """A single cited source extracted from the LLM answer.
-
-    Populated by the SynthesisEngine from inline [Source: filename, p.N] markers.
-    """
+    """Internal intermediate model used by SynthesisEngine during citation parsing."""
     filename: str
     page_number: int | None = None
     section_heading: str | None = None
     chunk_type: str | None = None
+
+
+class CitationPage(BaseModel):
+    """A single cited page within a document."""
+    page_number: int | None = None
+    section_heading: str | None = None
+    chunk_type: str | None = None
+
+
+class CitationGroup(BaseModel):
+    """All cited pages from a single document, grouped for readability.
+
+    pages are sorted by page_number ascending.
+    Groups are ordered by first citation appearance in the answer.
+    """
+    filename: str
+    pages: list[CitationPage]
 
 
 class AskRequest(BaseModel):
@@ -74,11 +88,11 @@ class AskResponse(BaseModel):
 
     Also the payload of the final SSE 'done' event in streaming mode.
 
-    answer   — clean LLM answer text with inline citation markers removed.
-    citations — structured list of every source cited, in citation order.
+    answer    — clean LLM answer text with inline citation markers removed.
+    citations — sources grouped by document, pages sorted ascending.
     """
     answer: str
-    citations: list[SourceItem]
+    citations: list[CitationGroup]
 
 
 # ---------------------------------------------------------------------------
