@@ -60,7 +60,9 @@ class Reranker:
         self._token_false_id: int | None = None
         self._prefix_tokens: list[int] | None = None
         self._suffix_tokens: list[int] | None = None
-        self._max_length: int = 8192
+        # 2048 is safe for our chunks (512 tiktoken ≈ 600-800 Qwen tokens + prefix/suffix).
+        # The original 8192 caused padding to 8192 tokens even for short sequences.
+        self._max_length: int = 2048
 
     def load(self, device: str | None = None) -> None:
         """Load Qwen3-Reranker-0.6B into memory.
@@ -152,46 +154,89 @@ class Reranker:
             return []
 
         pairs = [self._format_pair(query, doc, instruction) for doc in documents]
-        all_scores: list[float] = []
 
-        for i in range(0, len(pairs), self._batch_size):
-            batch_pairs = pairs[i : i + self._batch_size]
+        # Patch lm_head to compute logits only for the final token position.
+        #
+        # The default forward pass computes lm_head(hidden_states[:, ALL_POSITIONS, :])
+        # producing (batch, seq_len, vocab_size). For batch=8, seq_len≈2000, vocab=151936
+        # at fp16 that is ~4.87 GiB — causing OOM when the GPU is also running llama.cpp.
+        #
+        # The patch intercepts the lm_head input and slices to the last position only,
+        # producing (batch, 1, vocab_size) = ~2.4 MB regardless of sequence length.
+        # This is correct because Qwen3-Reranker only reads logits[:, -1, :] for scoring.
+        #
+        # num_logits_to_keep=1 is the official API for this but is silently ignored by
+        # some transformers versions when called via __call__ rather than generate().
+        orig_lm_head_fwd = self._model.lm_head.forward
+        self._model.lm_head.forward = lambda x: orig_lm_head_fwd(x[:, -1:, :])
 
-            # Step 1: Tokenize body text only (no special tokens, no padding yet).
-            # Leave room for pre-encoded prefix+suffix tokens.
-            body_max = self._max_length - len(self._prefix_tokens) - len(self._suffix_tokens)
-            inputs = self._tokenizer(
-                batch_pairs,
-                padding=False,
-                truncation=True,
-                return_attention_mask=False,
-                max_length=body_max,
-            )
+        batch_size = self._batch_size
+        try:
+            while True:
+                # Pre-emptively free cached allocations so inference has maximum headroom.
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
 
-            # Step 2: Wrap each body with pre-encoded prefix + suffix tokens.
-            for j in range(len(inputs["input_ids"])):
-                inputs["input_ids"][j] = (
-                    self._prefix_tokens + inputs["input_ids"][j] + self._suffix_tokens
-                )
+                try:
+                    all_scores: list[float] = []
+                    for i in range(0, len(pairs), batch_size):
+                        batch_pairs = pairs[i : i + batch_size]
 
-            # Step 3: Pad batch to uniform length (left-padding per tokenizer config).
-            padded = self._tokenizer.pad(
-                inputs,
-                padding=True,
-                return_tensors="pt",
-                max_length=self._max_length,
-            )
-            padded = {k: v.to(self._model.device) for k, v in padded.items()}
+                        # Step 1: Tokenize body text only (no padding yet).
+                        body_max = self._max_length - len(self._prefix_tokens) - len(self._suffix_tokens)
+                        inputs = self._tokenizer(
+                            batch_pairs,
+                            padding=False,
+                            truncation=True,
+                            return_attention_mask=False,
+                            max_length=body_max,
+                        )
 
-            # Step 4: Forward pass; extract final-position yes/no logits.
-            logits = self._model(**padded).logits[:, -1, :]
-            true_logit = logits[:, self._token_true_id]
-            false_logit = logits[:, self._token_false_id]
+                        # Step 2: Wrap each body with pre-encoded prefix + suffix tokens.
+                        for j in range(len(inputs["input_ids"])):
+                            inputs["input_ids"][j] = (
+                                self._prefix_tokens + inputs["input_ids"][j] + self._suffix_tokens
+                            )
 
-            # log_softmax over [false, true] then exp → relevance probability
-            stacked = torch.stack([false_logit, true_logit], dim=1)
-            log_probs = torch.nn.functional.log_softmax(stacked, dim=1)
-            scores = log_probs[:, 1].exp().tolist()
-            all_scores.extend(scores)
+                        # Step 3: Pad batch to longest sequence in this batch only.
+                        padded = self._tokenizer.pad(
+                            inputs,
+                            padding=True,
+                            return_tensors="pt",
+                        )
+                        padded = {k: v.to(self._model.device) for k, v in padded.items()}
 
-        return all_scores
+                        # Step 4: Forward pass. lm_head patch ensures output is
+                        # (batch, 1, vocab) not (batch, seq_len, vocab). logits[:, -1, :]
+                        # selects the single kept position → (batch, vocab_size).
+                        logits = self._model(**padded).logits[:, -1, :]
+                        true_logit = logits[:, self._token_true_id]
+                        false_logit = logits[:, self._token_false_id]
+
+                        stacked = torch.stack([false_logit, true_logit], dim=1)
+                        log_probs = torch.nn.functional.log_softmax(stacked, dim=1)
+                        all_scores.extend(log_probs[:, 1].exp().tolist())
+
+                    return all_scores  # success
+
+                except torch.cuda.OutOfMemoryError:
+                    torch.cuda.empty_cache()
+                    next_batch_size = batch_size // 2
+                    if next_batch_size < 1:
+                        # GPU OOM even at batch_size=1. Return neutral scores so the
+                        # server does not crash — RRF ordering is preserved upstream.
+                        logger.error(
+                            "Reranker: GPU OOM at batch_size=1 — returning neutral scores. "
+                            "RRF ranking preserved. Consider setting RERANKER_DEVICE=cpu."
+                        )
+                        return [0.5] * len(documents)
+                    logger.warning(
+                        "Reranker: GPU OOM at batch_size=%d, retrying with batch_size=%d",
+                        batch_size,
+                        next_batch_size,
+                    )
+                    batch_size = next_batch_size
+        finally:
+            self._model.lm_head.forward = orig_lm_head_fwd
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()

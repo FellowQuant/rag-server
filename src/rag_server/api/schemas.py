@@ -73,9 +73,12 @@ class AskResponse(BaseModel):
     """Non-streaming response for POST /ask?streaming=false.
 
     Also the payload of the final SSE 'done' event in streaming mode.
+
+    answer   — clean LLM answer text with inline citation markers removed.
+    citations — structured list of every source cited, in citation order.
     """
     answer: str
-    sources: list[SourceItem]
+    citations: list[SourceItem]
 
 
 # ---------------------------------------------------------------------------

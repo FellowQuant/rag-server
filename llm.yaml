@@ -1,10 +1,10 @@
 llm:
   provider: llamacpp            # vllm | llamacpp | bedrock
-  model: gpt-oss-20b-Q4_K_M
+  model: Qwen/Qwen2.5-7B-Instruct
   base_url: http://localhost:8088/v1   # run-model.sh default port 8088
   region: us-east-1             # bedrock only; ignored for vllm/llamacpp
-  context_chunks: 5             # top-N reranked chunks sent to LLM (token budget enforced separately)
-  max_context_tokens: 8000      # tiktoken cl100k_base token budget for context block (not counting system prompt + response)
+  context_chunks: 20            # top-N reranked chunks sent to LLM (token budget enforced separately)
+  max_context_tokens: 32000     # tiktoken cl100k_base token budget for context block (not counting system prompt + response)
   system_prompt: |
     You are a quantitative finance research assistant with deep expertise in mathematical
     finance, stochastic calculus, portfolio theory, and financial econometrics.

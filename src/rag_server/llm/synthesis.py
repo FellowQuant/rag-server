@@ -6,7 +6,7 @@ This module bridges Phase 3 (retrieval) and the LLM providers:
 3. Assembles system prompt + user prompt with labeled context block
 4. Calls provider.complete() or provider.stream() with tenacity retry
 5. Parses [Source: filename, p.N] citations from the answer
-6. Returns AskResponse(answer, sources)
+6. Returns AskResponse(answer, citations) — answer is stripped of inline markers
 
 The engine is provider-agnostic — it calls only provider.complete() and provider.stream().
 """
@@ -39,6 +39,13 @@ _CITATION_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Strips inline citation markers from answer text (eats preceding whitespace to
+# avoid leaving dangling spaces before punctuation).
+_CITATION_STRIP_RE = re.compile(r'\s*\[Source:\s*[^\]]+\]', re.IGNORECASE)
+
+# Strips the LLM-generated "## Sources" bibliography section appended at end of answer.
+_SOURCES_SECTION_RE = re.compile(r'\n{0,2}##\s*Sources\b.*$', re.DOTALL | re.IGNORECASE)
+
 _USER_PROMPT_TEMPLATE = """\
 ## Retrieved Context
 
@@ -62,7 +69,7 @@ class SynthesisEngine:
 
         # Non-streaming
         result = await engine.synthesize(query="...", chunks=[...])
-        # result.answer: str, result.sources: list[SourceItem]
+        # result.answer: str (clean, no inline markers), result.citations: list[SourceItem]
 
         # Streaming — yields token strings; call parse_result() after collecting
         tokens = []
@@ -161,48 +168,71 @@ class SynthesisEngine:
         """Parse inline citations from answer text and build AskResponse.
 
         Matching strategy:
-        1. Extract filenames from [Source: ...] markers using lenient regex.
-        2. Match against chunk source_filenames (exact match first).
-        3. Deduplicate by filename preserving first-seen order.
+        1. Extract (filename, page) pairs from [Source: ...] markers using lenient regex.
+        2. Match filenames against chunk source_filenames (exact match, then suffix match).
+        3. Deduplicate by (filename, page_number) pair — same PDF cited at different pages
+           produces a separate source entry per page.
         4. Fallback: if zero citations found, include ALL chunks as sources.
         """
-        cited_filenames: list[str] = []
-        seen_in_regex: set[str] = set()
+        # Extract (raw_filename, page_or_None) pairs preserving citation order
+        cited: list[tuple[str, int | None]] = []
+        seen_in_regex: set[tuple[str, int | None]] = set()
 
         for match in _CITATION_RE.finditer(answer):
             raw_name = match.group(1).strip()
-            if raw_name and raw_name not in seen_in_regex:
-                seen_in_regex.add(raw_name)
-                cited_filenames.append(raw_name)
+            page = int(match.group(2)) if match.group(2) else None
+            key = (raw_name, page)
+            if raw_name and key not in seen_in_regex:
+                seen_in_regex.add(key)
+                cited.append((raw_name, page))
 
-        # Build chunk lookup for fast matching
-        chunk_by_filename: dict[str, ChunkResult] = {}
+        # Build lookup: filename → all matching chunks (not just first)
+        chunks_by_filename: dict[str, list[ChunkResult]] = {}
         for chunk in chunks:
-            if chunk.source_filename not in chunk_by_filename:
-                chunk_by_filename[chunk.source_filename] = chunk
+            chunks_by_filename.setdefault(chunk.source_filename, []).append(chunk)
 
-        # Match extracted names to known filenames
+        # Build secondary lookup: (filename, page_number) → chunk for metadata
+        chunk_by_page: dict[tuple[str, int], ChunkResult] = {}
+        for chunk in chunks:
+            if chunk.page_number is not None:
+                chunk_by_page.setdefault((chunk.source_filename, chunk.page_number), chunk)
+
         sources: list[SourceItem] = []
-        seen_sources: set[str] = set()
+        seen_sources: set[tuple[str, int | None]] = set()
 
-        for cited in cited_filenames:
-            # Exact match
-            matched_chunk = chunk_by_filename.get(cited)
-            if matched_chunk is None:
-                # Suffix match (handles path-prefix variations like "doc.pdf" vs "/data/doc.pdf")
-                for fname, chunk in chunk_by_filename.items():
-                    if fname.endswith(cited) or cited.endswith(fname):
-                        matched_chunk = chunk
+        for (raw_name, cited_page) in cited:
+            # Resolve filename: exact match first, then suffix match
+            matched_list = chunks_by_filename.get(raw_name)
+            resolved_name = raw_name
+            if matched_list is None:
+                for fname, clist in chunks_by_filename.items():
+                    if fname.endswith(raw_name) or raw_name.endswith(fname):
+                        matched_list = clist
+                        resolved_name = fname
                         break
 
-            if matched_chunk and matched_chunk.source_filename not in seen_sources:
-                seen_sources.add(matched_chunk.source_filename)
-                sources.append(SourceItem(
-                    filename=matched_chunk.source_filename,
-                    page_number=matched_chunk.page_number,
-                    section_heading=matched_chunk.section_heading,
-                    chunk_type=matched_chunk.chunk_type,
-                ))
+            if not matched_list:
+                continue
+
+            # Use page from the citation regex; fall back to chunk's page if not captured
+            page = cited_page if cited_page is not None else matched_list[0].page_number
+
+            source_key = (resolved_name, page)
+            if source_key in seen_sources:
+                continue
+            seen_sources.add(source_key)
+
+            # Look up metadata chunk for this exact (filename, page) if available
+            meta_chunk = chunk_by_page.get((resolved_name, page)) if page is not None else matched_list[0]
+            if meta_chunk is None:
+                meta_chunk = matched_list[0]
+
+            sources.append(SourceItem(
+                filename=resolved_name,
+                page_number=page,
+                section_heading=meta_chunk.section_heading,
+                chunk_type=meta_chunk.chunk_type,
+            ))
 
         # Fallback: zero citations extracted
         if not sources and chunks:
@@ -211,10 +241,11 @@ class SynthesisEngine:
                 "Falling back to all %d input chunks as sources.",
                 len(chunks),
             )
-            seen_fallback: set[str] = set()
+            seen_fallback: set[tuple[str, int | None]] = set()
             for chunk in chunks:
-                if chunk.source_filename not in seen_fallback:
-                    seen_fallback.add(chunk.source_filename)
+                key = (chunk.source_filename, chunk.page_number)
+                if key not in seen_fallback:
+                    seen_fallback.add(key)
                     sources.append(SourceItem(
                         filename=chunk.source_filename,
                         page_number=chunk.page_number,
@@ -222,7 +253,11 @@ class SynthesisEngine:
                         chunk_type=chunk.chunk_type,
                     ))
 
-        return AskResponse(answer=answer, sources=sources)
+        # Strip the LLM-appended "## Sources" section, then inline markers.
+        clean_answer = _SOURCES_SECTION_RE.sub("", answer).rstrip()
+        clean_answer = _CITATION_STRIP_RE.sub("", clean_answer).strip()
+
+        return AskResponse(answer=clean_answer, citations=sources)
 
     # ------------------------------------------------------------------
     # LLM calls with retry

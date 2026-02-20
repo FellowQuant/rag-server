@@ -224,9 +224,9 @@ async def ask(
         ask_response = await synthesis_engine.synthesize(query=query, chunks=chunks)
         return {
             "answer": ask_response.answer,
-            "sources": [
+            "citations": [
                 {"filename": s.filename, "page": s.page_number}
-                for s in ask_response.sources
+                for s in ask_response.citations
             ],
         }
     except Exception as exc:

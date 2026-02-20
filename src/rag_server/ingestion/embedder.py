@@ -171,18 +171,25 @@ class Embedder:
                 sparse_values=[],
             )
 
-        output = self._model.encode_queries(
-            [query],
-            return_dense=True,
-            return_sparse=True,
-            return_colbert_vecs=False,
-        )
-        dense_vec: list[float] = output["dense_vecs"][0].tolist()
-        raw: dict[int, float] = output["lexical_weights"][0]
-        # CRITICAL: raw keys are int token IDs — use directly as Qdrant sparse
-        # indices. Do NOT call convert_id_to_token() (returns strings, incompatible).
-        return QueryEmbedding(
-            dense_vector=dense_vec,
-            sparse_indices=list(raw.keys()),
-            sparse_values=list(raw.values()),
-        )
+        import torch
+        try:
+            output = self._model.encode_queries(
+                [query],
+                return_dense=True,
+                return_sparse=True,
+                return_colbert_vecs=False,
+            )
+            dense_vec: list[float] = output["dense_vecs"][0].tolist()
+            raw: dict[int, float] = output["lexical_weights"][0]
+            # CRITICAL: raw keys are int token IDs — use directly as Qdrant sparse
+            # indices. Do NOT call convert_id_to_token() (returns strings, incompatible).
+            return QueryEmbedding(
+                dense_vector=dense_vec,
+                sparse_indices=list(raw.keys()),
+                sparse_values=list(raw.values()),
+            )
+        finally:
+            # Release PyTorch inference cache so other GPU processes (llama.cpp,
+            # reranker) can reclaim VRAM immediately after query embedding.
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()

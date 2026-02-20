@@ -6,11 +6,11 @@ query parameter (default: true).
 Streaming (GET /ask?streaming=true, or POST /ask with default):
   - Returns SSE stream (text/event-stream)
   - event="token": token delta strings as they generate
-  - event="done": final JSON {"answer": "...", "sources": [...]}
+  - event="done": final JSON {"answer": "...", "citations": [...]}
   - event="error": {"detail": "..."} on failure
 
 Non-streaming (POST /ask?streaming=false):
-  - Returns JSON {"answer": "...", "sources": [...]}
+  - Returns JSON {"answer": "...", "citations": [...]}
   - Waits for full generation before returning
 
 Both variants call the same retrieval + synthesis pipeline. The /ask endpoint

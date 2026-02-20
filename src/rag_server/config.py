@@ -16,6 +16,11 @@ class Settings(BaseSettings):
 
     max_upload_size: int = Field(default=100 * 1024 * 1024)  # 100MB; set MAX_UPLOAD_SIZE env var to override
 
+    # Device for retrieval models in the FastAPI process.
+    # "auto" = use CUDA if available, else CPU.
+    # Set RERANKER_DEVICE=cpu to free ~1.2 GB VRAM when running alongside a large LLM.
+    reranker_device: str = Field(default="auto", alias="RERANKER_DEVICE", validation_alias="RERANKER_DEVICE")
+
     @property
     def qdrant_url(self) -> str:
         return f"http://{self.qdrant_host}:{self.qdrant_port}"

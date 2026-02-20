@@ -140,7 +140,8 @@ async def lifespan(app: FastAPI):
     # VRAM: ~1.2 GB fp16. BGE-M3 worker uses ~1 GB in separate process.
     # Shared GPU steady-state peak ~2.2 GB — monitor with nvidia-smi under load.
     reranker = Reranker()
-    await asyncio.to_thread(reranker.load)
+    reranker_device = None if settings.reranker_device == "auto" else settings.reranker_device
+    await asyncio.to_thread(reranker.load, reranker_device)
     logger.info("Reranker (Qwen3-Reranker-0.6B) loaded in FastAPI process")
 
     # Wire the RetrievalEngine from all loaded components.

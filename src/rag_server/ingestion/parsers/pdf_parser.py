@@ -11,6 +11,8 @@ INGEST-05: Formula chunks enriched with surrounding paragraph context.
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
 from pathlib import Path
 
 from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
@@ -35,6 +37,18 @@ from rag_server.ingestion.chunker import (
 
 logger = logging.getLogger(__name__)
 
+# Matches PDF /uniXXXX glyph name artifacts that Docling emits when ToUnicode
+# CMap entries use the /uniXXXX naming convention instead of standard glyph names.
+# Example: "/uniFB01" → "ﬁ" (U+FB01, fi ligature), then NFKC maps it to "fi".
+_UNI_GLYPH_RE = re.compile(r'/uni([0-9A-Fa-f]{4})')
+
+
+def _normalize_text(text: str) -> str:
+    """Normalize PDF-extracted text: resolve /uniXXXX escapes and decompose ligatures."""
+    text = _UNI_GLYPH_RE.sub(lambda m: chr(int(m.group(1), 16)), text)
+    return unicodedata.normalize("NFKC", text)
+
+
 # Reduce CodeFormula model batch size to avoid CUDA OOM on consumer GPUs.
 # Default batch_size=5 requires ~18-20 GB VRAM; batch_size=2 reduces to ~8-10 GB.
 # Must be set before DocumentConverter is constructed (affects pipeline options).
@@ -56,6 +70,10 @@ def make_converter(use_gpu: bool = True) -> DocumentConverter:
     # Without this, FormulaItem.text is empty string (detection ≠ recognition).
     pipeline_options.do_formula_enrichment = True
     pipeline_options.do_code_enrichment = True
+    # Disable OCR: finance PDFs are born-digital; OCR loads RapidOCR on GPU
+    # (~1 GB VRAM) and causes CUBLAS_STATUS_ALLOC_FAILED when combined with
+    # BGE-M3 + CodeFormulaV2 + layout models on consumer GPUs.
+    pipeline_options.do_ocr = False
 
     if use_gpu:
         pipeline_options.accelerator_options = AcceleratorOptions(
@@ -109,10 +127,10 @@ def parse_pdf(file_path: str | Path, converter: DocumentConverter) -> list[Parse
         page_no = item.prov[0].page_no if item.prov else None
 
         if isinstance(item, SectionHeaderItem):
-            current_heading = item.text or current_heading
+            current_heading = _normalize_text(item.text) if item.text else current_heading
             # Section headers are navigation context, not standalone chunks.
             # Update last_paragraph so formulas after a heading have some context.
-            last_paragraph = item.text or last_paragraph
+            last_paragraph = current_heading or last_paragraph
 
         elif isinstance(item, FormulaItem):
             formula_latex = item.text or ""
@@ -161,7 +179,7 @@ def parse_pdf(file_path: str | Path, converter: DocumentConverter) -> list[Parse
             )
 
         elif isinstance(item, TextItem):
-            text = item.text or ""
+            text = _normalize_text(item.text) if item.text else ""
             last_paragraph = text  # track for formula context enrichment
             if not text.strip():
                 continue
