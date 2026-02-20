@@ -1,6 +1,10 @@
 # FellowQuant RAG Server
 
-A local RAG (Retrieval-Augmented Generation) server built for quantitative finance research documents. Ingests PDFs, LaTeX source files, and Jupyter notebooks with structure preservation — financial tables stay as tables, mathematical formulas stay as LaTeX, code blocks stay intact. Exposes a REST API and MCP server for Claude Code integration.
+A local RAG (Retrieval-Augmented Generation) server built for quantitative finance research documents. Ingests PDFs, LaTeX source files, and Jupyter notebooks with structure preservation — financial tables stay as tables, mathematical formulas stay as LaTeX, code blocks stay intact. Exposes a REST API and MCP server.
+
+<p align="center">
+  <img src="assets/rag_server_logo.png" alt="RAG Server Logo" width="900">
+</p>
 
 ## What it does
 
