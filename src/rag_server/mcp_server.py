@@ -8,8 +8,8 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from mcp.server.fastmcp import FastMCP, Context
-from mcp.server.fastmcp.exceptions import ToolError
+from fastmcp import FastMCP, Context
+from fastmcp.exceptions import ToolError
 from sqlalchemy import select
 
 from rag_server.config import get_settings

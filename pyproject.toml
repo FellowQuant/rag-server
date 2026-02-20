@@ -29,6 +29,7 @@ dependencies = [
     "sse-starlette>=1.8.0",
     "tenacity>=9.0.0",
     "pyyaml>=6.0.0",
+    "fastmcp>=2.0.0",
 ]
 
 [tool.hatch.build.targets.wheel]
