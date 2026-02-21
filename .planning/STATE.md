@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Core value:** Accurate retrieval and synthesis from dense quantitative finance documents — tables stay as tables, formulas stay as formulas, and citations trace back to exact sources.
-**Current focus:** Phase 7 - PIP Package (2/2 plans done — PHASE COMPLETE)
+**Current focus:** Phase 7 - PIP Package (3/3 plans done — PHASE COMPLETE)
 
 ## Current Position
 
 Phase: 7 of 7 (PIP Package)
-Plan: 2 of 2 (07-02 complete — rag-server CLI dispatcher + commands + setup wizard)
-Status: Phase 7 COMPLETE (2/2 plans complete) — ALL PHASES DONE
-Last activity: 2026-02-21 — 07-02-PLAN.md complete (rag-server CLI: start/mcp/start-qdrant/setup subcommands + idempotent setup wizard)
+Plan: 3 of 3 (07-03 complete — GitHub Actions Trusted Publisher workflow, README quickstart, smoke test)
+Status: Phase 7 COMPLETE (3/3 plans complete) — ALL PHASES DONE
+Last activity: 2026-02-21 — 07-03-PLAN.md complete (publish.yml OIDC workflow + README pip quickstart + smoke_test_cli.sh)
 
 Progress: [██████████] 100% (21 of 21 plans complete)
 
@@ -43,6 +43,7 @@ Progress: [██████████] 100% (21 of 21 plans complete)
 | Phase 06-mcp-server P02 | 1 | 2 tasks | 2 files |
 | Phase 07 P01 | 1 | 3 tasks | 5 files |
 | Phase 07 P02 | 2 | 3 tasks | 3 files |
+| Phase 07-pip-package P03 | 9 | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -133,6 +134,8 @@ Recent decisions affecting current work:
 - [Phase 07-pip-package]: claude mcp add-json used over claude mcp add — only add-json accepts full JSON payload with env block for DATA_DIR injection
 - [Phase 07-pip-package]: Sentinel written only in TTY — non-interactive runs do not mark setup complete to force interactive setup on next TTY session
 - [Phase 07-pip-package]: docker-compose.yml written to ~/.fellowquant-rag/ (persistent) not tempfile — Docker volume paths in compose files break with temp directories
+- [Phase 07-pip-package]: OIDC Trusted Publisher chosen over PYPI_TOKEN — keyless PyPI publish, no long-lived secret in GitHub
+- [Phase 07-pip-package]: Two-job workflow (build + publish) — clean separation of artifact production and distribution
 
 ### Pending Todos
 
@@ -149,5 +152,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed 07-02-PLAN.md — rag-server CLI fully implemented: start/mcp/start-qdrant/setup subcommands, first-run sentinel, idempotent setup wizard with global/local MCP registration and llm.yaml copy. Phase 7 PIP Package 2/2 plans complete. ALL 7 PHASES DONE.
+Stopped at: Completed 07-03-PLAN.md — GitHub Actions Trusted Publisher workflow, README pip quickstart, smoke test script. Phase 7 PIP Package 3/3 plans complete. ALL 7 PHASES DONE.
 Resume file: None
