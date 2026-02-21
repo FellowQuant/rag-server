@@ -45,13 +45,6 @@ If the `claude` CLI is not installed, setup writes `.mcp.json` and prints instru
 - **Answers** questions with a local LLM (vLLM, llama.cpp, or AWS Bedrock) and inline citations
 - **Integrates** with Claude Code via MCP stdio protocol — 5 tools: `retrieve`, `ask`, `list_documents`, `get_document`, `delete_document`
 
-## Requirements
-
-- Python 3.12+
-- Docker (for Qdrant)
-- GPU with ~2.5 GB VRAM (BGE-M3 ~1 GB + Qwen3-Reranker ~1.2 GB)
-- A running LLM endpoint (vLLM, llama.cpp, or AWS Bedrock credentials)
-
 ## Setup (development / clone-and-run)
 
 > **For most users:** install via `pip install fellowquant-rag` (see [Installation](#installation) above). The steps below are for contributors cloning the repo directly.
@@ -173,11 +166,11 @@ The `.mcp.json` at the project root registers the MCP server automatically when 
 ### Manual MCP test
 
 ```bash
-# Browse tools interactively
+# Browse tools interactively (development only)
 uv run mcp dev src/rag_server/mcp_server.py
 
-# Register with Claude Code manually (if .mcp.json isn't picked up)
-claude mcp add rag-server uv run python -m rag_server.mcp_server
+# Re-run setup to (re-)register with Claude Code
+rag-server setup
 ```
 
 ## Technology stack
@@ -194,14 +187,15 @@ claude mcp add rag-server uv run python -m rag_server.mcp_server
 | LLM | vLLM / llama.cpp / AWS Bedrock | Provider-swappable via `llm.yaml` |
 | Database | SQLite + SQLAlchemy | Document and chunk metadata |
 | API | FastAPI + uvicorn | Async; RFC 7807 errors; SSE streaming |
-| MCP | FastMCP (mcp 1.26.0) | stdio transport; 5 tools |
+| MCP | fastmcp | stdio transport; 5 tools |
 
 ## Verification scripts
 
-Each phase has a smoke test in `scripts/`:
-
 ```bash
-# REST API (Phase 5) — requires running server at localhost:8001
+# Verify the installed wheel (entry points, assets, subcommands)
+bash scripts/smoke_test_cli.sh
+
+# REST API — requires running server at localhost:8001
 python scripts/verify_api.py
 
 # Earlier phases (run in order against a running server)
