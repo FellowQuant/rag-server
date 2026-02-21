@@ -6,6 +6,38 @@ A local RAG (Retrieval-Augmented Generation) server built for quantitative finan
   <img src="assets/rag_server_logo.png" alt="RAG Server Logo" width="900">
 </p>
 
+## Installation
+
+```bash
+pip install fellowquant-rag
+```
+
+After installation, run `rag-server setup` (or any `rag-server` command) to configure the MCP server in Claude Code.
+
+### Requirements
+
+- Python 3.12+
+- Docker (for Qdrant vector database)
+- A running LLM endpoint (vLLM, llama.cpp, or AWS Bedrock credentials)
+- GPU with ~2.5 GB VRAM (BGE-M3 ~1 GB + Qwen3-Reranker ~1.2 GB)
+
+### CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `rag-server setup` | Configure MCP server in Claude Code (global or local scope) |
+| `rag-server start-qdrant` | Start Qdrant vector database via Docker |
+| `rag-server start` | Start FastAPI REST server on port 8001 |
+| `rag-server mcp` | Start MCP stdio server (used internally by Claude Code) |
+
+### MCP Setup
+
+`rag-server setup` prompts for:
+- **Global scope** (`--scope user`): MCP available in all Claude Code projects
+- **Local scope**: writes `.mcp.json` in the current directory (commit to share with your team)
+
+If the `claude` CLI is not installed, setup writes `.mcp.json` and prints instructions.
+
 ## What it does
 
 - **Ingests** PDFs (via Docling), `.tex` files, and `.ipynb` notebooks with layout-aware chunking
@@ -20,7 +52,9 @@ A local RAG (Retrieval-Augmented Generation) server built for quantitative finan
 - GPU with ~2.5 GB VRAM (BGE-M3 ~1 GB + Qwen3-Reranker ~1.2 GB)
 - A running LLM endpoint (vLLM, llama.cpp, or AWS Bedrock credentials)
 
-## Setup
+## Setup (development / clone-and-run)
+
+> **For most users:** install via `pip install fellowquant-rag` (see [Installation](#installation) above). The steps below are for contributors cloning the repo directly.
 
 **1. Install dependencies**
 
