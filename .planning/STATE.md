@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-13)
 
 **Core value:** Accurate retrieval and synthesis from dense quantitative finance documents — tables stay as tables, formulas stay as formulas, and citations trace back to exact sources.
-**Current focus:** Phase 7 - PIP Package (1/2 plans done)
+**Current focus:** Phase 7 - PIP Package (2/2 plans done — PHASE COMPLETE)
 
 ## Current Position
 
 Phase: 7 of 7 (PIP Package)
-Plan: 1 of 2 (07-01 complete — pyproject.toml + embedded assets + hatch build verified)
-Status: Phase 7 in progress (1/2 plans complete)
-Last activity: 2026-02-21 — 07-01-PLAN.md complete (fellowquant-rag package setup + embedded assets)
+Plan: 2 of 2 (07-02 complete — rag-server CLI dispatcher + commands + setup wizard)
+Status: Phase 7 COMPLETE (2/2 plans complete) — ALL PHASES DONE
+Last activity: 2026-02-21 — 07-02-PLAN.md complete (rag-server CLI: start/mcp/start-qdrant/setup subcommands + idempotent setup wizard)
 
 Progress: [██████████] 100% (21 of 21 plans complete)
 
@@ -42,6 +42,7 @@ Progress: [██████████] 100% (21 of 21 plans complete)
 | Phase 05-rest-api P03 | 1 | 1 tasks | 1 files |
 | Phase 06-mcp-server P02 | 1 | 2 tasks | 2 files |
 | Phase 07 P01 | 1 | 3 tasks | 5 files |
+| Phase 07 P02 | 2 | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -127,6 +128,11 @@ Recent decisions affecting current work:
 - [Phase 06-mcp-server]: env:{} in .mcp.json intentional — Claude Code inherits parent shell environment; DATA_DIR, QDRANT_URL etc need not be listed explicitly
 - [Phase 07-pip-package]: PyPI package name fellowquant-rag differs from import name rag_server — standard namespace split, intentional
 - [Phase 07-pip-package]: Qdrant-only docker-compose.yml in assets/ strips rag-server build service — prevents build: . failure on user machines without Dockerfile
+- [Phase 07-pip-package]: Lazy imports in CLI routing — all subcommand imports inside routing block to avoid import-time side effects; critical for mcp (stdout is JSON-RPC channel)
+- [Phase 07-pip-package]: mcp subcommand bypasses all setup checks — any stdout before mcp.run(stdio) corrupts the JSON-RPC protocol
+- [Phase 07-pip-package]: claude mcp add-json used over claude mcp add — only add-json accepts full JSON payload with env block for DATA_DIR injection
+- [Phase 07-pip-package]: Sentinel written only in TTY — non-interactive runs do not mark setup complete to force interactive setup on next TTY session
+- [Phase 07-pip-package]: docker-compose.yml written to ~/.fellowquant-rag/ (persistent) not tempfile — Docker volume paths in compose files break with temp directories
 
 ### Pending Todos
 
@@ -143,5 +149,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed 07-01-PLAN.md — fellowquant-rag PyPI package setup: pyproject.toml renamed, rag-server console_script, embedded Qdrant-only docker-compose.yml and llm.yaml.example in assets/, hatch build verified. Phase 7 PIP Package 1/2 plans complete.
+Stopped at: Completed 07-02-PLAN.md — rag-server CLI fully implemented: start/mcp/start-qdrant/setup subcommands, first-run sentinel, idempotent setup wizard with global/local MCP registration and llm.yaml copy. Phase 7 PIP Package 2/2 plans complete. ALL 7 PHASES DONE.
 Resume file: None
