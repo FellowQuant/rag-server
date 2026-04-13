@@ -24,8 +24,10 @@ Design notes:
 """
 from __future__ import annotations
 
+import gc
 import logging
 import multiprocessing
+import os
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -44,6 +46,20 @@ logger = logging.getLogger(__name__)
 
 # Qdrant upsert batch size. 100 points/batch balances throughput and memory.
 QDRANT_BATCH_SIZE = 100
+
+
+def _log_mem(label: str) -> None:
+    """Log current process RSS in MB for memory profiling."""
+    rss_kb = 0
+    try:
+        with open(f"/proc/{os.getpid()}/status") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    rss_kb = int(line.split()[1])
+                    break
+    except Exception:
+        pass
+    logger.info("MEM [%s]: RSS=%.0f MB", label, rss_kb / 1024)
 
 
 def _get_sync_engine(async_sqlite_url: str):
@@ -73,36 +89,25 @@ def _dispatch_parser(
                    converter avoids reloading Docling ML models (~10-20s each).
     """
     if file_format == "pdf":
-        from docling.datamodel.base_models import ConversionStatus
         from rag_server.ingestion.parsers.pdf_parser import parse_pdf
 
         if converter is None:
-            # Fallback: build converter on demand (slow -- only for testing).
             from rag_server.ingestion.parsers.pdf_parser import make_converter
             converter = make_converter(use_gpu=True)
 
-        # Convert once and check status to detect partial success.
-        # parse_pdf() also calls converter.convert() internally; we call it
-        # here first to inspect the status, then pass the converter to parse_pdf
-        # which will convert again. This is intentional: parse_pdf owns the
-        # full chunking logic, and the status check is a lightweight pre-flight.
-        #
-        # Rule 1 fix: to avoid double-conversion, we call converter.convert()
-        # once to check status, then re-use the converter (not the result) in
-        # parse_pdf. The alternative -- inlining parse_pdf's chunking logic here
-        # -- would duplicate significant code and create a maintenance burden.
-        # Double-convert is acceptable since converter caches tokenisation state.
-        status_result = converter.convert(str(file_path), raises_on_error=False)
-        is_partial = (status_result.status == ConversionStatus.PARTIAL_SUCCESS)
+        _log_mem("before-convert")
+        chunks, is_partial = parse_pdf(file_path, converter)
+        _log_mem("after-convert")
 
-        if status_result.status == ConversionStatus.FAILURE:
-            logger.error("Docling: total failure on %s -- %s", file_path, status_result.errors)
-            return [], False
+        # Reclaim Docling per-document memory (page backends, image caches).
+        gc.collect()
+        try:
+            import torch
+            torch.cuda.empty_cache()
+        except Exception:
+            pass
+        _log_mem("after-convert-gc")
 
-        if is_partial:
-            logger.warning("Docling: partial success on %s -- %s", file_path, status_result.errors)
-
-        chunks = parse_pdf(file_path, converter)
         return chunks, is_partial
 
     elif file_format == "tex":
@@ -259,6 +264,7 @@ def run_pipeline(
     engine = _get_sync_engine(job.sqlite_url)
 
     logger.info("Pipeline: starting job for document %s (%s)", document_id, job.file_format)
+    _log_mem("pipeline-start")
 
     # Step 1: Mark as indexing.
     _set_document_status(document_id, "indexing", engine)
@@ -268,6 +274,7 @@ def run_pipeline(
         parsed_chunks, is_partial = _dispatch_parser(
             job.file_format, job.file_path, converter
         )
+        _log_mem("after-parse")
         if not parsed_chunks:
             logger.warning("Pipeline: parser returned 0 chunks for %s", document_id)
 
@@ -293,6 +300,7 @@ def run_pipeline(
                 session.add(row)
             session.commit()
         logger.info("Pipeline: %d chunks written to SQLite for %s", len(parsed_chunks), document_id)
+        _log_mem("after-sqlite-write")
 
         # Step 5: Embed chunks and upsert to Qdrant.
         # chunk_ids is passed as a parallel structure -- no monkey-patching.
@@ -305,6 +313,7 @@ def run_pipeline(
             collection=job.qdrant_collection,
         )
         logger.info("Pipeline: Qdrant upsert complete for %s", document_id)
+        _log_mem("after-qdrant-upsert")
 
         # Step 6: Update page_count on Document (count unique page numbers).
         unique_pages = {c.page_number for c in parsed_chunks if c.page_number is not None}
@@ -344,6 +353,10 @@ def run_pipeline(
                     "Pipeline: failed to send BM25 update signal for %s (queue full?)",
                     document_id,
                 )
+
+        _log_mem("pipeline-end")
+        gc.collect()
+        _log_mem("after-gc")
 
     except Exception as exc:
         logger.exception("Pipeline: failure on document %s", document_id)
