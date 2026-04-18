@@ -1,0 +1,14 @@
+# Pre-commit hooks: enforce ruff lint + format on staged changes before commit.
+# Install once per clone:   pre-commit install
+# Run manually:             pre-commit run --all-files
+#
+# Hooks run on STAGED files only by default, so pre-existing lint debt in
+# untouched files does not block commits. New or edited files must pass.
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
