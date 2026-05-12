@@ -81,7 +81,7 @@ async def _poll_bm25_updates(
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def rag_lifespan(app: FastAPI):
     """FastAPI lifespan: startup → yield → shutdown.
 
     Startup:
@@ -209,6 +209,16 @@ async def lifespan(app: FastAPI):
     logger.info("RAG Server shutdown complete")
 
 
+mcp_http_app = create_http_mcp_app()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with mcp_http_app.lifespan(app):
+        async with rag_lifespan(app):
+            yield
+
+
 app = FastAPI(
     title="FellowQuant RAG Server",
     description="Document ingestion and retrieval for quantitative finance research",
@@ -246,7 +256,7 @@ from rag_server.api.retrieve import router as retrieve_router  # noqa: E402
 
 app.include_router(retrieve_router, prefix="/api/v1")
 
-app.mount("/mcp", create_http_mcp_app())
+app.mount("/mcp", mcp_http_app)
 
 
 @app.get("/health")
