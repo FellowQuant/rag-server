@@ -1,10 +1,8 @@
 {
   "mcpServers": {
     "rag-server": {
-      "type": "stdio",
-      "command": "uv",
-      "args": ["run", "python", "-m", "rag_server.mcp_server"],
-      "env": {}
+      "type": "http",
+      "url": "http://127.0.0.1:8001/mcp"
     }
   }
 }

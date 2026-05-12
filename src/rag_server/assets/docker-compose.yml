@@ -3,8 +3,8 @@ services:
     image: qdrant/qdrant:v1.16.3
     container_name: rag-qdrant
     ports:
-      - "6330:6333"
-      - "6331:6334"
+      - "6333:6333"
+      - "6334:6334"
     volumes:
       - ./data/qdrant:/qdrant/storage:z
     environment:
@@ -16,20 +16,3 @@ services:
       retries: 5
       start_period: 20s
     restart: unless-stopped
-
-  rag-server:
-    build: .
-    container_name: rag-server
-    ports:
-      - "8001:8001"
-    volumes:
-      - ./data:/app/data:z
-    environment:
-      - DATA_DIR=/app/data
-      - QDRANT_HOST=qdrant
-    depends_on:
-      qdrant:
-        condition: service_healthy
-    restart: unless-stopped
-    profiles:
-      - app

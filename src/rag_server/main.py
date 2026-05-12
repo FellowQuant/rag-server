@@ -8,6 +8,8 @@ on Linux (forking after CUDA init causes undefined behavior).
 This file is the only place set_start_method is called; it must be the first
 import in any process that starts the FastAPI app.
 """
+# ruff: noqa: E402
+
 import multiprocessing
 
 # MUST be before any CUDA-related imports (torch, docling, FlagEmbedding).
@@ -34,6 +36,7 @@ from rag_server.retrieval.engine import RetrievalEngine
 from rag_server.retrieval.reranker import Reranker
 from rag_server.vector_store.qdrant import QdrantStore
 from rag_server.worker.manager import WorkerManager
+from rag_server.mcp_server import create_http_mcp_app
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +53,7 @@ async def _poll_bm25_updates(
     """
     while True:
         try:
+
             def _get_nowait():
                 try:
                     return result_queue.get_nowait()
@@ -140,7 +144,9 @@ async def lifespan(app: FastAPI):
     # VRAM: ~1.2 GB fp16. BGE-M3 worker uses ~1 GB in separate process.
     # Shared GPU steady-state peak ~2.2 GB — monitor with nvidia-smi under load.
     reranker = Reranker()
-    reranker_device = None if settings.reranker_device == "auto" else settings.reranker_device
+    reranker_device = (
+        None if settings.reranker_device == "auto" else settings.reranker_device
+    )
     await asyncio.to_thread(reranker.load, reranker_device)
     logger.info("Reranker (Qwen3-Reranker-0.6B) loaded in FastAPI process")
 
@@ -216,7 +222,9 @@ register_exception_handlers(app)
 # Add middleware (LIFO order — last added becomes outermost)
 # Desired runtime order: CORS → Logging → UploadSizeLimit → Router
 # Add in reverse: UploadSizeLimit first (innermost), CORS last (outermost)
-app.add_middleware(UploadSizeLimitMiddleware, max_upload_size=get_settings().max_upload_size)
+app.add_middleware(
+    UploadSizeLimitMiddleware, max_upload_size=get_settings().max_upload_size
+)
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
@@ -227,13 +235,18 @@ app.add_middleware(
 
 # Mount document lifecycle router.
 from rag_server.api.documents import router as documents_router  # noqa: E402
+
 app.include_router(documents_router, prefix="/api/v1")
 
 from rag_server.api.ask import router as ask_router  # noqa: E402
+
 app.include_router(ask_router, prefix="/api/v1")
 
 from rag_server.api.retrieve import router as retrieve_router  # noqa: E402
+
 app.include_router(retrieve_router, prefix="/api/v1")
+
+app.mount("/mcp", create_http_mcp_app())
 
 
 @app.get("/health")

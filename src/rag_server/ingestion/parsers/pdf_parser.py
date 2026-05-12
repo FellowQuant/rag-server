@@ -150,7 +150,70 @@ def make_converter(use_gpu: bool = True) -> DocumentConverter:
     )
 
 
-def parse_pdf(file_path: str | Path, converter: DocumentConverter) -> list[ParsedChunk]:
+def _teardown_conversion_result(result) -> None:
+    """Explicitly release all heavy objects inside a ConversionResult.
+
+    Docling's _unload() (called in base_pipeline.execute's finally block)
+    unloads page and document backends, but the ConversionResult itself —
+    with all Page objects, image caches, parsed_page data, the assembled
+    DoclingDocument, and the InputDocument wrapper — remains alive as long
+    as the caller holds a reference.
+
+    When keep_backend=True (required for formula/code enrichment), Docling's
+    _integrate_results() SKIPS per-page backend cleanup during the pipeline.
+    The _unload() at the end does call unload(), but the Python wrapper
+    objects persist with all their Pydantic model data.
+
+    This function aggressively breaks references so gc.collect() can reclaim
+    the memory immediately after we've extracted our chunks.
+
+    See: docs/docling-memory-leak.md for full analysis.
+    """
+    try:
+        # 1. Clear all page-level data (image caches, parsed pages, backends).
+        for page in getattr(result, 'pages', []):
+            page._image_cache = {}
+            page.predictions = None
+            page.assembled = None
+            if hasattr(page, 'parsed_page'):
+                page.parsed_page = None
+            if page._backend is not None:
+                try:
+                    page._backend.unload()
+                except Exception:
+                    pass
+                page._backend = None
+        result.pages.clear()
+
+        # 2. Unload the document-level backend (pypdfium2/docling-parse handles).
+        input_doc = getattr(result, 'input', None)
+        if input_doc is not None:
+            backend = getattr(input_doc, '_backend', None)
+            if backend is not None:
+                try:
+                    backend.unload()
+                except Exception:
+                    pass
+                input_doc._backend = None
+
+        # 3. Drop the assembled DoclingDocument (contains all extracted content
+        #    nodes, tables, formulas — can be tens of MB for large documents).
+        result.document = None
+        result.assembled = None
+
+        # 4. Clear error list and timings (minor, but breaks reference cycles).
+        if hasattr(result, 'errors'):
+            result.errors.clear()
+        if hasattr(result, 'timings'):
+            result.timings.clear()
+
+    except Exception as exc:
+        logger.debug("_teardown_conversion_result: ignoring cleanup error: %s", exc)
+
+
+def parse_pdf(
+    file_path: str | Path, converter: DocumentConverter,
+) -> tuple[list[ParsedChunk], bool]:
     """Convert a PDF file to a list of typed ParsedChunk objects.
 
     Uses Docling's iterate_items() to walk the document in reading order,
@@ -162,21 +225,21 @@ def parse_pdf(file_path: str | Path, converter: DocumentConverter) -> list[Parse
         converter: DocumentConverter instance (reused across documents in worker).
 
     Returns:
-        List of ParsedChunk with chunk_index populated sequentially from 0.
-        Returns an empty list if conversion fails entirely.
-
-    Partial success (ConversionStatus.PARTIAL_SUCCESS): returns all successfully
-    parsed chunks. The caller (run_pipeline) is responsible for detecting partial
-    success and setting document status to "indexed_partial".
+        (chunks, is_partial) tuple. chunks has chunk_index populated
+        sequentially from 0. is_partial is True when Docling reports
+        PARTIAL_SUCCESS. Returns ([], False) on total failure.
     """
     result = converter.convert(str(file_path), raises_on_error=False)
 
     from docling.datamodel.base_models import ConversionStatus
     if result.status == ConversionStatus.FAILURE:
         logger.error("Docling: total failure on %s — %s", file_path, result.errors)
-        return []
+        _teardown_conversion_result(result)
+        del result
+        return [], False
 
-    if result.status == ConversionStatus.PARTIAL_SUCCESS:
+    is_partial = result.status == ConversionStatus.PARTIAL_SUCCESS
+    if is_partial:
         logger.warning("Docling: partial success on %s — %s", file_path, result.errors)
 
     doc = result.document
@@ -264,4 +327,16 @@ def parse_pdf(file_path: str | Path, converter: DocumentConverter) -> list[Parse
         chunk.chunk_index = idx
 
     logger.info("parse_pdf: %d chunks from %s (status=%s)", len(raw_chunks), file_path, result.status)
-    return raw_chunks
+
+    # Explicitly tear down the ConversionResult now that all data has been
+    # extracted into ParsedChunk objects. This breaks the reference chain:
+    #   ConversionResult -> InputDocument -> PdfDocumentBackend (pypdfium2/docling-parse)
+    #   ConversionResult -> pages[] -> Page._backend, _image_cache, parsed_page
+    #   ConversionResult -> document (DoclingDocument with all content nodes)
+    # Without this, the entire ConversionResult stays alive until the caller's
+    # gc.collect(), and even then Pydantic model reference cycles may prevent
+    # full collection. See docs/docling-memory-leak.md.
+    _teardown_conversion_result(result)
+    del result
+
+    return raw_chunks, is_partial

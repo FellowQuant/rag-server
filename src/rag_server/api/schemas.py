@@ -1,4 +1,5 @@
 """Pydantic request/response models for the documents API."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -8,18 +9,20 @@ from pydantic import BaseModel
 
 class DocumentUploadResponse(BaseModel):
     """Response for POST /documents — returned immediately (202)."""
+
     id: str
-    status: str          # "pending"
+    status: str  # "pending"
     filename: str
-    file_size: int       # bytes
-    file_format: str     # "pdf" | "tex" | "ipynb"
+    file_size: int  # bytes
+    file_format: str  # "pdf" | "tex" | "ipynb"
     created_at: datetime
 
 
 class DocumentStatusResponse(BaseModel):
     """Response for GET /documents/{id}."""
+
     id: str
-    status: str          # "pending" | "indexing" | "indexed" | "indexed_partial" | "failed"
+    status: str  # "pending" | "indexing" | "indexed" | "indexed_partial" | "failed"
     filename: str
     file_format: str
     file_size: int
@@ -32,6 +35,7 @@ class DocumentStatusResponse(BaseModel):
 
 class DocumentListItem(BaseModel):
     """Single item in the GET /documents list response."""
+
     id: str
     status: str
     filename: str
@@ -44,6 +48,7 @@ class DocumentListItem(BaseModel):
 
 class DocumentListResponse(BaseModel):
     """Response for GET /documents."""
+
     documents: list[DocumentListItem]
     total: int
 
@@ -52,8 +57,10 @@ class DocumentListResponse(BaseModel):
 # Ask endpoint schemas (Phase 4)
 # ---------------------------------------------------------------------------
 
+
 class SourceItem(BaseModel):
     """Internal intermediate model used by SynthesisEngine during citation parsing."""
+
     filename: str
     page_number: int | None = None
     section_heading: str | None = None
@@ -62,6 +69,7 @@ class SourceItem(BaseModel):
 
 class CitationPage(BaseModel):
     """A single cited page within a document."""
+
     page_number: int | None = None
     section_heading: str | None = None
     chunk_type: str | None = None
@@ -73,14 +81,18 @@ class CitationGroup(BaseModel):
     pages are sorted by page_number ascending.
     Groups are ordered by first citation appearance in the answer.
     """
+
     filename: str
     pages: list[CitationPage]
 
 
 class AskRequest(BaseModel):
     """Request body for POST /ask."""
+
     query: str
-    top_k: int = 10     # retrieval top_k (before context_chunks LLM limit)
+    top_k: int = 10  # retrieval top_k (before context_chunks LLM limit)
+    document_ids: list[str] | None = None
+    min_score: float | None = None
 
 
 class AskResponse(BaseModel):
@@ -91,6 +103,7 @@ class AskResponse(BaseModel):
     answer    — clean LLM answer text with inline citation markers removed.
     citations — sources grouped by document, pages sorted ascending.
     """
+
     answer: str
     citations: list[CitationGroup]
 
@@ -99,12 +112,14 @@ class AskResponse(BaseModel):
 # Retrieve endpoint schemas (Phase 5)
 # ---------------------------------------------------------------------------
 
+
 class RetrieveRequest(BaseModel):
     """Request body for POST /retrieve."""
+
     query: str
-    top_k: int = 10                          # default 10, same as /ask (Claude's discretion)
-    document_ids: list[str] | None = None    # optional: scope to specific documents
-    min_score: float | None = None           # optional: reranker score threshold (0.0-1.0)
+    top_k: int = 10  # default 10, same as /ask (Claude's discretion)
+    document_ids: list[str] | None = None  # optional: scope to specific documents
+    min_score: float | None = None  # optional: reranker score threshold (0.0-1.0)
 
 
 class ChunkResultItem(BaseModel):
@@ -113,6 +128,7 @@ class ChunkResultItem(BaseModel):
     Maps directly from retrieval.models.ChunkResult dataclass fields.
     All five retrieval scores included per locked CONTEXT.md decision.
     """
+
     chunk_id: str
     document_id: str
     chunk_index: int
@@ -131,6 +147,7 @@ class ChunkResultItem(BaseModel):
 
 class RetrieveResponse(BaseModel):
     """Response for POST /retrieve."""
+
     query: str
     results: list[ChunkResultItem]
     total_candidates: int
