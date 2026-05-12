@@ -1,15 +1,8 @@
 {
   "mcpServers": {
     "rag-server": {
-      "type": "stdio",
-      "command": "bash",
-      "args": [
-        "-c",
-        "cd /home/jcanossa/workspace/fellow-quant/core/rag_server && uv run python -m rag_server.mcp_server"
-      ],
-      "env": {
-        "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"
-      }
+      "type": "http",
+      "url": "http://127.0.0.1:8001/mcp"
     }
   }
 }

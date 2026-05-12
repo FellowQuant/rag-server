@@ -7,14 +7,17 @@ Handles:
   - Sentinel file to prevent repeated auto-trigger on first run
   - Non-TTY safe: all prompts return defaults when stdin is not a tty
 """
+
 import json
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-SENTINEL = Path.home() / ".fellowquant-rag" / "setup-done"
-CONFIG_DIR = Path.home() / ".fellowquant-rag"
+from rag_server.config import Settings
+
+SENTINEL = Path.home() / ".rag-server" / "setup-done"
+CONFIG_DIR = Path.home() / ".rag-server"
 
 
 def safe_input(prompt: str, default: str = "") -> str:
@@ -24,7 +27,10 @@ def safe_input(prompt: str, default: str = "") -> str:
     and return ``default`` immediately without blocking.
     """
     if not sys.stdin.isatty():
-        print(f"[non-interactive] using default for: {prompt!r} -> {default!r}", file=sys.stderr)
+        print(
+            f"[non-interactive] using default for: {prompt!r} -> {default!r}",
+            file=sys.stderr,
+        )
         return default
     return input(prompt)
 
@@ -57,7 +63,15 @@ def claude_mcp_registered() -> bool:
         return False
 
 
-def write_mcp_json(cwd: Path, data_dir: str) -> None:
+def _build_http_mcp_config() -> dict[str, str]:
+    settings = Settings()
+    return {
+        "type": "http",
+        "url": settings.mcp_url,
+    }
+
+
+def write_mcp_json(cwd: Path, data_dir: str | None = None) -> None:
     """Write (or update) .mcp.json in cwd with the rag-server MCP entry.
 
     Uses a read-modify-write pattern: existing keys under mcpServers are
@@ -71,32 +85,20 @@ def write_mcp_json(cwd: Path, data_dir: str) -> None:
         except (json.JSONDecodeError, OSError):
             config = {}
     config.setdefault("mcpServers", {})
-    config["mcpServers"]["rag-server"] = {
-        "type": "stdio",
-        "command": "rag-server",
-        "args": ["mcp"],
-        "env": {"DATA_DIR": data_dir},
-    }
+    config["mcpServers"]["rag-server"] = _build_http_mcp_config()
     mcp_file.write_text(json.dumps(config, indent=2) + "\n")
 
 
-def register_mcp_global(data_dir: str) -> bool:
+def register_mcp_global(data_dir: str | None = None) -> bool:
     """Register rag-server globally via `claude mcp add-json ... --scope user`.
 
-    Uses `claude mcp add-json` (not `claude mcp add`) because the env block
-    containing DATA_DIR requires a full JSON payload — the positional-arg form
-    does not support env injection.
+    Uses `claude mcp add-json` with a remote HTTP MCP config.
 
     Returns True on success, False if claude CLI is absent or the command fails.
     """
     if not shutil.which("claude"):
         return False
-    payload = json.dumps({
-        "type": "stdio",
-        "command": "rag-server",
-        "args": ["mcp"],
-        "env": {"DATA_DIR": data_dir},
-    })
+    payload = json.dumps(_build_http_mcp_config())
     result = subprocess.run(
         ["claude", "mcp", "add-json", "rag-server", payload, "--scope", "user"],
         capture_output=True,
@@ -115,8 +117,7 @@ def cmd_setup(first_run: bool = False) -> None:
     Flow:
         1. Print header
         2. Prompt for scope (global / local)
-        3. Prompt for DATA_DIR
-        4. MCP registration (global or local path)
+        3. MCP registration (global or local path)
         5. llm.yaml copy from embedded asset
         6. Write sentinel (TTY only)
         7. Print summary
@@ -127,13 +128,12 @@ def cmd_setup(first_run: bool = False) -> None:
         print("=== FellowQuant RAG Server Setup ===")
 
     # --- 1. Scope prompt ---
-    scope_raw = safe_input("Register MCP globally (g) or locally for this project (l)? [g/l]: ", default="l")
+    scope_raw = safe_input(
+        "Register MCP globally (g) or locally for this project (l)? [g/l]: ",
+        default="l",
+    )
     scope = scope_raw.strip().lower() or "l"
     use_global = scope.startswith("g")
-
-    # --- 2. DATA_DIR prompt ---
-    data_dir_raw = safe_input("Data directory [./data/]: ", default="./data/")
-    data_dir = data_dir_raw.strip().rstrip("/") or "./data"
 
     cwd = Path.cwd()
     mcp_scope_description = ""
@@ -143,7 +143,9 @@ def cmd_setup(first_run: bool = False) -> None:
         already = claude_mcp_registered()
         do_register = True
         if already:
-            ans = safe_input("rag-server already registered globally. Update? [y/N]: ", default="n")
+            ans = safe_input(
+                "rag-server already registered globally. Update? [y/N]: ", default="n"
+            )
             do_register = ans.strip().lower().startswith("y")
 
         if do_register:
@@ -158,7 +160,7 @@ def cmd_setup(first_run: bool = False) -> None:
                 _do_local = True
                 mcp_scope_description = f"local (fallback): {cwd / '.mcp.json'}"
             else:
-                ok = register_mcp_global(data_dir)
+                ok = register_mcp_global()
                 if ok:
                     print("Registered globally in ~/.claude.json")
                     mcp_scope_description = "global (~/.claude.json)"
@@ -168,8 +170,7 @@ def cmd_setup(first_run: bool = False) -> None:
                         "Warning: `claude mcp add-json` failed. "
                         "Try manually:\n"
                         f"  claude mcp add-json rag-server "
-                        f"'{{\"type\":\"stdio\",\"command\":\"rag-server\",\"args\":[\"mcp\"],"
-                        f"\"env\":{{\"DATA_DIR\":\"{data_dir}\"}}}}' --scope user",
+                        f"'{json.dumps(_build_http_mcp_config())}' --scope user",
                         file=sys.stderr,
                     )
                     _do_local = True
@@ -181,27 +182,31 @@ def cmd_setup(first_run: bool = False) -> None:
 
         if _do_local:
             if mcp_json_exists(cwd):
-                ans = safe_input(".mcp.json already has rag-server. Update? [y/N]: ", default="n")
+                ans = safe_input(
+                    ".mcp.json already has rag-server. Update? [y/N]: ", default="n"
+                )
                 if ans.strip().lower().startswith("y"):
-                    write_mcp_json(cwd, data_dir)
+                    write_mcp_json(cwd)
                     print(f".mcp.json updated in {cwd}")
                 else:
                     print("Skipping .mcp.json update.")
             else:
-                write_mcp_json(cwd, data_dir)
+                write_mcp_json(cwd)
                 print(f".mcp.json written in {cwd}")
     else:
         # Local scope
         if mcp_json_exists(cwd):
-            ans = safe_input(".mcp.json already has rag-server. Update? [y/N]: ", default="n")
+            ans = safe_input(
+                ".mcp.json already has rag-server. Update? [y/N]: ", default="n"
+            )
             if ans.strip().lower().startswith("y"):
-                write_mcp_json(cwd, data_dir)
+                write_mcp_json(cwd)
                 print(f".mcp.json updated in {cwd}")
             else:
                 print("Skipping .mcp.json update.")
                 mcp_scope_description = f"local (existing, kept): {cwd / '.mcp.json'}"
         else:
-            write_mcp_json(cwd, data_dir)
+            write_mcp_json(cwd)
             print(f".mcp.json written in {cwd}")
         if not mcp_scope_description:
             mcp_scope_description = f"local: {cwd / '.mcp.json'}"
@@ -230,7 +235,7 @@ def cmd_setup(first_run: bool = False) -> None:
     print(
         f"\nSetup complete!\n"
         f"  MCP scope:  {mcp_scope_description}\n"
-        f"  Data dir:   {data_dir}/\n"
+        f"  Data dir:   {Settings().data_dir} (override with DATA_DIR when starting the server)\n"
         f"  llm.yaml:   {llm_yaml_path} (edit to configure LLM)\n"
         f"\nNext steps:\n"
         f"  rag-server start-qdrant   # start vector database\n"

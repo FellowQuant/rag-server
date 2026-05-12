@@ -4,17 +4,18 @@ All subcommand imports are lazy (inside routing block) to avoid import-time
 side effects — particularly important for the `mcp` subcommand which must not
 emit any stdout before the JSON-RPC channel is established.
 """
+
 import sys
 from pathlib import Path
 
-SENTINEL = Path.home() / ".fellowquant-rag" / "setup-done"
+SENTINEL = Path.home() / ".rag-server" / "setup-done"
 
 USAGE = """\
 Usage: rag-server <command>
 
 Commands:
   start          Launch FastAPI server (port 8001)
-  mcp            Start MCP stdio server (used by Claude Code)
+  mcp            Start legacy stdio MCP compatibility mode
   start-qdrant   Start Qdrant via Docker
   setup          Configure MCP registration (re-runnable)
 """
@@ -35,6 +36,7 @@ def _maybe_run_setup(cmd: str) -> None:
     if not SENTINEL.exists():
         if sys.stdin.isatty():
             from rag_server.cli.setup_wizard import cmd_setup
+
             cmd_setup(first_run=True)
         else:
             print(
@@ -55,6 +57,7 @@ def main() -> None:
     # mcp must be routed with ZERO setup checks — no sentinel, no print, no input.
     if cmd == "mcp":
         from rag_server.cli.commands import cmd_mcp
+
         cmd_mcp()
         return
 
@@ -62,12 +65,15 @@ def main() -> None:
 
     if cmd == "start":
         from rag_server.cli.commands import cmd_start
+
         cmd_start()
     elif cmd == "start-qdrant":
         from rag_server.cli.commands import cmd_start_qdrant
+
         cmd_start_qdrant()
     elif cmd == "setup":
         from rag_server.cli.setup_wizard import cmd_setup
+
         cmd_setup(first_run=False)
     else:
         print(f"Unknown command: {cmd!r}", file=sys.stderr)

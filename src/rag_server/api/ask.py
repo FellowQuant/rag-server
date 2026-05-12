@@ -16,13 +16,13 @@ Non-streaming (POST /ask?streaming=false):
 Both variants call the same retrieval + synthesis pipeline. The /ask endpoint
 is the primary Phase 4 interface; Phase 5 will add retrieval-only endpoints.
 """
+
 from __future__ import annotations
 
 import json
 import logging
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
 from sse_starlette import EventSourceResponse
 
 from rag_server.api.schemas import AskRequest, AskResponse
@@ -70,6 +70,8 @@ async def ask(
     retrieval_result = await retrieval_engine.search(
         query=body.query,
         top_k=body.top_k,
+        min_score=body.min_score,
+        document_ids=body.document_ids,
     )
     chunks = retrieval_result.results
 

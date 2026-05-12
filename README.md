@@ -9,7 +9,7 @@ A local RAG (Retrieval-Augmented Generation) server built for quantitative finan
 ## Installation
 
 ```bash
-pip install fellowquant-rag
+pip install rag-server
 ```
 
 After installation, run `rag-server setup` (or any `rag-server` command) to configure the MCP server in Claude Code.
@@ -28,7 +28,7 @@ After installation, run `rag-server setup` (or any `rag-server` command) to conf
 | `rag-server setup` | Configure MCP server in Claude Code (global or local scope) |
 | `rag-server start-qdrant` | Start Qdrant vector database via Docker |
 | `rag-server start` | Start FastAPI REST server on port 8001 |
-| `rag-server mcp` | Start MCP stdio server (used internally by Claude Code) |
+| `rag-server mcp` | Start legacy stdio MCP compatibility mode (proxies to the shared server) |
 
 ### MCP Setup
 
@@ -43,11 +43,11 @@ If the `claude` CLI is not installed, setup writes `.mcp.json` and prints instru
 - **Ingests** PDFs (via Docling), `.tex` files, and `.ipynb` notebooks with layout-aware chunking
 - **Retrieves** using three-mode hybrid search: BM25 keyword + BGE-M3 dense + BGE-M3 sparse, fused via RRF and reranked by Qwen3-Reranker-0.6B
 - **Answers** questions with a local LLM (vLLM, llama.cpp, or AWS Bedrock) and inline citations
-- **Integrates** with Claude Code via MCP stdio protocol — 5 tools: `retrieve`, `ask`, `list_documents`, `get_document`, `delete_document`
+- **Integrates** with Claude Code/Codex via HTTP MCP — 5 tools: `retrieve`, `ask`, `list_documents`, `get_document`, `delete_document`
 
 ## Setup (development / clone-and-run)
 
-> **For most users:** install via `pip install fellowquant-rag` (see [Installation](#installation) above). The steps below are for contributors cloning the repo directly.
+> **For most users:** install via `pip install rag-server` (see [Installation](#installation) above). The steps below are for contributors cloning the repo directly.
 
 **1. Install dependencies**
 
@@ -145,7 +145,9 @@ Upload size limit: 100 MB (returns 413).
 
 ## MCP Server (Claude Code)
 
-The `.mcp.json` at the project root registers the MCP server automatically when you open this project in Claude Code.
+The `.mcp.json` at the project root points clients at the shared local MCP endpoint:
+
+`http://127.0.0.1:8001/mcp`
 
 ### Tools
 
@@ -160,8 +162,7 @@ The `.mcp.json` at the project root registers the MCP server automatically when 
 ### Notes
 
 - File upload is done via the REST API (`POST /api/v1/documents`), not through MCP
-- BM25 keyword index is loaded from disk at MCP server startup — restart the MCP server after indexing new documents
-- Running the MCP server simultaneously with the FastAPI server uses ~4.4 GB VRAM total (both load BGE-M3 and Reranker)
+- MCP now proxies to the shared FastAPI runtime, so multiple clients do not each load their own BGE-M3/reranker stack
 
 ### Manual MCP test
 
@@ -187,7 +188,7 @@ rag-server setup
 | LLM | vLLM / llama.cpp / AWS Bedrock | Provider-swappable via `llm.yaml` |
 | Database | SQLite + SQLAlchemy | Document and chunk metadata |
 | API | FastAPI + uvicorn | Async; RFC 7807 errors; SSE streaming |
-| MCP | fastmcp | stdio transport; 5 tools |
+| MCP | fastmcp | streamable HTTP transport; 5 tools |
 
 ## Verification scripts
 
@@ -221,9 +222,9 @@ data/
 ### Environment variables (`.env`)
 
 ```bash
-DATA_DIR=./data
+DATA_DIR=./data   # optional override; default is repo-local rag-server/data
 QDRANT_HOST=localhost      # or container name inside Docker
-QDRANT_PORT=6333
+QDRANT_PORT=6330
 MAX_UPLOAD_SIZE=104857600  # 100 MB in bytes
 ```
 
