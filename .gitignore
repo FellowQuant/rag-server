@@ -2,6 +2,9 @@
 /.logs/
 /.claude/
 /.planning/
+.planning/
+.omc/
+.omx/
 __pycache__/
 *.pyc
 *.pyo
