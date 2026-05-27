@@ -9,6 +9,7 @@ INGEST-04: Code block chunks preserve syntax and language metadata.
 
 Uses nbformat.read(as_version=4) which auto-upgrades older notebook formats.
 """
+
 from __future__ import annotations
 
 import logging

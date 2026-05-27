@@ -1,17 +1,19 @@
 """Async Qdrant client wrapper for the RAG server vector store."""
+
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
 from typing import Any
 
-from qdrant_client import AsyncQdrantClient  # NOT QdrantClient — sync causes deadlocks in FastAPI
+from qdrant_client import (
+    AsyncQdrantClient,
+)  # NOT QdrantClient — sync causes deadlocks in FastAPI
 from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.models import (
     Distance,
     FieldCondition,
     Filter,
-    MatchAny,
     PointStruct,
     SparseIndexParams,
     SparseVectorParams,
@@ -29,9 +31,10 @@ DENSE_DIM = 1024
 @dataclass
 class VectorSearchResult:
     """Single result from dense or sparse Qdrant search."""
-    chunk_id: str           # UUID matching SQLite chunks.id
-    score: float            # Cosine similarity (dense) or dot product (sparse)
-    payload: dict           # document_id, chunk_type, page_number, section_heading, chunk_index
+
+    chunk_id: str  # UUID matching SQLite chunks.id
+    score: float  # Cosine similarity (dense) or dot product (sparse)
+    payload: dict  # document_id, chunk_type, page_number, section_heading, chunk_index
 
 
 class QdrantStore:
@@ -63,7 +66,7 @@ class QdrantStore:
         try:
             await self._client.get_collection(self._collection)
             logger.info("Qdrant collection '%s' already exists", self._collection)
-        except (UnexpectedResponse, Exception) as exc:
+        except (UnexpectedResponse, Exception):
             # Collection does not exist — create it
             # CRITICAL: sparse_vectors_config must be set NOW — cannot add later without data loss
             logger.info("Creating Qdrant collection '%s'", self._collection)
@@ -73,9 +76,7 @@ class QdrantStore:
                     "dense": VectorParams(size=DENSE_DIM, distance=Distance.COSINE)
                 },
                 sparse_vectors_config={
-                    "sparse": SparseVectorParams(
-                        index=SparseIndexParams(on_disk=False)
-                    )
+                    "sparse": SparseVectorParams(index=SparseIndexParams(on_disk=False))
                 },
             )
             logger.info("Collection '%s' created successfully", self._collection)
@@ -125,7 +126,7 @@ class QdrantStore:
         Uses payload filter on document_id field. Called when a document is
         deleted from SQLite — keeps both stores in sync.
         """
-        from qdrant_client.models import Filter, FieldCondition, MatchValue
+        from qdrant_client.models import Filter, MatchValue
 
         await self._client.delete(
             collection_name=self._collection,

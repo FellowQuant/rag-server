@@ -11,6 +11,7 @@ Usage:
     settings.llm.model      # "Qwen/Qwen2.5-7B-Instruct"
     settings.llm.base_url   # "http://localhost:8000/v1"
 """
+
 from __future__ import annotations
 
 from functools import lru_cache

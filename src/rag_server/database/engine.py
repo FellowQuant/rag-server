@@ -1,5 +1,5 @@
 from collections.abc import AsyncGenerator
-from sqlalchemy import event, text
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -20,6 +20,7 @@ async_session: async_sessionmaker[AsyncSession] = async_sessionmaker(
     engine,
     expire_on_commit=False,
 )
+
 
 # CRITICAL: Enable SQLite foreign key enforcement — off by default
 # Must be set per connection via event listener (research finding #2b)

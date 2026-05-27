@@ -19,6 +19,7 @@ Design decisions:
   - Empty corpus (no indexed chunks yet) is handled: bm25 is None, search
     returns [].
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -48,7 +49,7 @@ class BM25Manager:
     def __init__(self, pkl_path: pathlib.Path) -> None:
         self._path = pkl_path
         self._lock = asyncio.Lock()
-        self._bm25 = None           # BM25Okapi | None
+        self._bm25 = None  # BM25Okapi | None
         self._corpus_ids: list[str] = []
 
     async def build(self, session) -> None:
@@ -68,7 +69,7 @@ class BM25Manager:
             select(Chunk.id, Chunk.content)
             .join(Chunk.document)
             .where(Document.status.in_(["indexed", "indexed_partial"]))
-            .order_by(Chunk.id)   # stable ordering prevents corpus_ids drift
+            .order_by(Chunk.id)  # stable ordering prevents corpus_ids drift
         )
         rows = result.all()
 
@@ -77,6 +78,7 @@ class BM25Manager:
 
         def _build():
             from rank_bm25 import BM25Okapi
+
             return BM25Okapi(tokenized) if tokenized else None
 
         bm25 = await asyncio.to_thread(_build)
@@ -87,7 +89,8 @@ class BM25Manager:
 
         logger.info(
             "BM25Manager: index built with %d chunks, persisting to %s",
-            len(corpus_ids), self._path,
+            len(corpus_ids),
+            self._path,
         )
         await asyncio.to_thread(self._atomic_write, bm25, corpus_ids)
 
@@ -101,7 +104,9 @@ class BM25Manager:
             True if loaded successfully, False if file does not exist.
         """
         if not self._path.exists():
-            logger.info("BM25Manager: no pickle at %s, will build from SQLite", self._path)
+            logger.info(
+                "BM25Manager: no pickle at %s, will build from SQLite", self._path
+            )
             return False
         try:
             with open(self._path, "rb") as f:
@@ -113,7 +118,9 @@ class BM25Manager:
             )
             return True
         except Exception:
-            logger.exception("BM25Manager: failed to load pickle, will rebuild from SQLite")
+            logger.exception(
+                "BM25Manager: failed to load pickle, will rebuild from SQLite"
+            )
             return False
 
     def search(self, query: str, top_n: int) -> list[tuple[str, float]]:
@@ -142,7 +149,7 @@ class BM25Manager:
         return [
             (self._corpus_ids[i], float(scores[i]))
             for i in top_indices
-            if float(scores[i]) > 0.0   # skip zero-score chunks
+            if float(scores[i]) > 0.0  # skip zero-score chunks
         ]
 
     def _atomic_write(self, bm25, corpus_ids: list[str]) -> None:
@@ -151,7 +158,7 @@ class BM25Manager:
         try:
             with open(tmp, "wb") as f:
                 pickle.dump({"bm25": bm25, "corpus_ids": corpus_ids}, f)
-            tmp.rename(self._path)   # atomic on Linux (same filesystem)
+            tmp.rename(self._path)  # atomic on Linux (same filesystem)
         except Exception:
             logger.exception("BM25Manager: failed to write pickle to %s", self._path)
             try:

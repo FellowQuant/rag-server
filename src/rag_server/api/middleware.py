@@ -4,6 +4,7 @@ Two middleware classes:
 - LoggingMiddleware: logs method, path, status code, and duration for every request
 - UploadSizeLimitMiddleware: rejects uploads exceeding the configured size limit via Content-Length check
 """
+
 import logging
 import time
 

@@ -9,6 +9,7 @@ INGEST-05: Formula chunks enriched with surrounding paragraph context.
 
 Uses pylatexenc 2.10 (stable). Do NOT upgrade to 3.x alpha (API changes).
 """
+
 from __future__ import annotations
 
 import logging
@@ -29,16 +30,23 @@ from rag_server.ingestion.chunker import (
 logger = logging.getLogger(__name__)
 
 # Standard AMS math environments that should become formula chunks.
-MATH_ENVS: frozenset[str] = frozenset({
-    "equation", "equation*",
-    "align", "align*",
-    "gather", "gather*",
-    "multline", "multline*",
-    "eqnarray", "eqnarray*",
-    "split",
-    "cases",
-    "array",
-})
+MATH_ENVS: frozenset[str] = frozenset(
+    {
+        "equation",
+        "equation*",
+        "align",
+        "align*",
+        "gather",
+        "gather*",
+        "multline",
+        "multline*",
+        "eqnarray",
+        "eqnarray*",
+        "split",
+        "cases",
+        "array",
+    }
+)
 
 
 def parse_latex(file_path: str | Path) -> list[ParsedChunk]:

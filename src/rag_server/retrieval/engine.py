@@ -23,6 +23,7 @@ Design decisions:
   - Reranker always runs (LOCKED: not skippable per CONTEXT.md).
   - Engine embeds query internally (LOCKED: plain text in, no pre-embedding).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -89,7 +90,7 @@ def _rrf_merge(
     for leg, ranked in all_legs.items():
         for rank, (chunk_id, score) in enumerate(ranked):
             rrf_scores.setdefault(chunk_id, 0.0)
-            rrf_scores[chunk_id] += 1.0 / (k + rank + 1)   # rank is 0-indexed
+            rrf_scores[chunk_id] += 1.0 / (k + rank + 1)  # rank is 0-indexed
             individual.setdefault(chunk_id, {"bm25": 0.0, "dense": 0.0, "sparse": 0.0})
             individual[chunk_id][leg] = score
 
@@ -113,10 +114,10 @@ class RetrievalEngine:
 
     def __init__(
         self,
-        embedder,          # Embedder instance (must have encode_query())
-        qdrant_store,      # QdrantStore instance (must have query_dense, query_sparse)
-        bm25_manager,      # BM25Manager instance (must have search())
-        reranker,          # Reranker instance (must have compute_scores())
+        embedder,  # Embedder instance (must have encode_query())
+        qdrant_store,  # QdrantStore instance (must have query_dense, query_sparse)
+        bm25_manager,  # BM25Manager instance (must have search())
+        reranker,  # Reranker instance (must have compute_scores())
     ) -> None:
         self._embedder = embedder
         self._qdrant = qdrant_store
@@ -170,7 +171,9 @@ class RetrievalEngine:
         if document_ids is not None:
             # Build Qdrant payload filter to restrict dense+sparse search to these documents.
             qdrant_filter = Filter(
-                must=[FieldCondition(key="document_id", match=MatchAny(any=document_ids))]
+                must=[
+                    FieldCondition(key="document_id", match=MatchAny(any=document_ids))
+                ]
             )
 
             # Pre-fetch allowed chunk_ids from SQLite to post-filter BM25 results.
@@ -193,8 +196,12 @@ class RetrievalEngine:
             return self._bm25.search(query, top_n=candidate_k)
 
         bm25_task = asyncio.to_thread(_bm25_search)
-        dense_task = self._qdrant.query_dense(dense_vec, limit=candidate_k, query_filter=qdrant_filter)
-        sparse_task = self._qdrant.query_sparse(sparse_indices, sparse_values, limit=candidate_k, query_filter=qdrant_filter)
+        dense_task = self._qdrant.query_dense(
+            dense_vec, limit=candidate_k, query_filter=qdrant_filter
+        )
+        sparse_task = self._qdrant.query_sparse(
+            sparse_indices, sparse_values, limit=candidate_k, query_filter=qdrant_filter
+        )
 
         bm25_results, dense_results, sparse_results = await asyncio.gather(
             bm25_task, dense_task, sparse_task
@@ -206,15 +213,20 @@ class RetrievalEngine:
         # Post-filter BM25 results when document_ids scope is active.
         # BM25 index is global — Qdrant filter doesn't apply here.
         if allowed_chunk_ids is not None:
-            bm25_ranking = [(cid, score) for cid, score in bm25_ranking if cid in allowed_chunk_ids]
+            bm25_ranking = [
+                (cid, score) for cid, score in bm25_ranking if cid in allowed_chunk_ids
+            ]
 
         dense_ranking = [(r.chunk_id, r.score) for r in dense_results]
         sparse_ranking = [(r.chunk_id, r.score) for r in sparse_results]
 
         # --- Step 3: RRF fusion ---
         rrf_candidates = _rrf_merge(
-            bm25_ranking, dense_ranking, sparse_ranking,
-            k=_RRF_K, top_n=candidate_k,
+            bm25_ranking,
+            dense_ranking,
+            sparse_ranking,
+            k=_RRF_K,
+            top_n=candidate_k,
         )
         # rrf_candidates: [(chunk_id, rrf_score, {leg: score})]
 
@@ -265,7 +277,10 @@ class RetrievalEngine:
 
         # --- Step 6: Build ChunkResult list and apply filters ---
         # Index rrf candidates by chunk_id for score lookup
-        rrf_by_id = {cid: (rrf_score, leg_scores) for cid, rrf_score, leg_scores in rrf_candidates}
+        rrf_by_id = {
+            cid: (rrf_score, leg_scores)
+            for cid, rrf_score, leg_scores in rrf_candidates
+        }
 
         chunk_results: list[ChunkResult] = []
         for chunk_id, reranker_score in zip(ordered_ids, reranker_scores):
@@ -275,22 +290,24 @@ class RetrievalEngine:
             if min_score is not None and reranker_score < min_score:
                 continue
 
-            chunk_results.append(ChunkResult(
-                chunk_id=chunk_id,
-                document_id=row.document_id,
-                chunk_index=row.chunk_index,
-                content=row.content,
-                display_content=row.display_content,
-                source_filename=row.filename,
-                page_number=row.page_number,
-                section_heading=row.section_heading,
-                chunk_type=row.chunk_type,
-                bm25_score=leg_scores.get("bm25", 0.0),
-                dense_score=leg_scores.get("dense", 0.0),
-                sparse_score=leg_scores.get("sparse", 0.0),
-                rrf_score=rrf_score,
-                reranker_score=reranker_score,
-            ))
+            chunk_results.append(
+                ChunkResult(
+                    chunk_id=chunk_id,
+                    document_id=row.document_id,
+                    chunk_index=row.chunk_index,
+                    content=row.content,
+                    display_content=row.display_content,
+                    source_filename=row.filename,
+                    page_number=row.page_number,
+                    section_heading=row.section_heading,
+                    chunk_type=row.chunk_type,
+                    bm25_score=leg_scores.get("bm25", 0.0),
+                    dense_score=leg_scores.get("dense", 0.0),
+                    sparse_score=leg_scores.get("sparse", 0.0),
+                    rrf_score=rrf_score,
+                    reranker_score=reranker_score,
+                )
+            )
 
         # Sort by reranker score descending (reranker is the final ranker)
         chunk_results.sort(key=lambda r: r.reranker_score, reverse=True)
@@ -300,7 +317,10 @@ class RetrievalEngine:
 
         logger.info(
             "RetrievalEngine: query=%r top_k=%d candidates=%d returned=%d",
-            query[:80], top_k, total_candidates, len(final_results),
+            query[:80],
+            top_k,
+            total_candidates,
+            len(final_results),
         )
 
         return RetrievalResult(

@@ -12,6 +12,7 @@ INGEST-05: Formula chunks enriched with surrounding paragraph context.
 from __future__ import annotations
 
 import logging
+import tempfile
 from pathlib import Path
 
 from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
@@ -20,7 +21,7 @@ from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.datamodel.settings import settings as docling_settings
 from docling.document_converter import DocumentConverter, PdfFormatOption
 
-from rag_server.ingestion.chunker import ParsedChunk
+from rag_server.ingestion.chunker import ParsedChunk, ParsedChunkBatch
 from rag_server.ingestion.parsers.docling_chunks import chunks_from_docling_document
 
 logger = logging.getLogger(__name__)
@@ -246,3 +247,88 @@ def parse_pdf(
     del result
 
     return raw_chunks, is_partial
+
+
+def _pdf_page_count(file_path: str | Path) -> int:
+    import pypdfium2 as pdfium
+
+    doc = pdfium.PdfDocument(str(file_path))
+    try:
+        return len(doc)
+    finally:
+        doc.close()
+
+
+def _write_pdf_page_range(
+    source_path: str | Path,
+    target_path: str | Path,
+    page_indexes: list[int],
+) -> None:
+    import pypdfium2 as pdfium
+
+    source = pdfium.PdfDocument(str(source_path))
+    target = pdfium.PdfDocument.new()
+    try:
+        target.import_pages(source, pages=page_indexes)
+        target.save(target_path)
+    finally:
+        target.close()
+        source.close()
+
+
+def iter_pdf_batches(
+    file_path: str | Path,
+    converter: DocumentConverter,
+    *,
+    pages_per_batch: int,
+    large_file_bytes: int,
+):
+    """Yield parsed PDF chunks in page-range batches for large documents."""
+    path = Path(file_path)
+    pages_per_batch = max(1, pages_per_batch)
+    file_size = path.stat().st_size
+    page_count = _pdf_page_count(path)
+
+    if file_size <= large_file_bytes or page_count <= pages_per_batch:
+        chunks, is_partial = parse_pdf(path, converter)
+        yield ParsedChunkBatch(
+            chunks=chunks,
+            is_partial=is_partial,
+            page_count=page_count,
+        )
+        return
+
+    logger.info(
+        "iter_pdf_batches: splitting %s (%d bytes, %d pages) into %d-page batches",
+        file_path,
+        file_size,
+        page_count,
+        pages_per_batch,
+    )
+    with tempfile.TemporaryDirectory(prefix="rag_pdf_batches_") as tmp:
+        tmp_dir = Path(tmp)
+        for start_page in range(0, page_count, pages_per_batch):
+            end_page = min(start_page + pages_per_batch, page_count)
+            page_indexes = list(range(start_page, end_page))
+            batch_path = tmp_dir / f"pages_{start_page + 1:06d}_{end_page:06d}.pdf"
+            try:
+                _write_pdf_page_range(path, batch_path, page_indexes)
+                chunks, is_partial = parse_pdf(batch_path, converter)
+                for chunk in chunks:
+                    if chunk.page_number is not None:
+                        chunk.page_number += start_page
+                yield ParsedChunkBatch(
+                    chunks=chunks,
+                    is_partial=is_partial,
+                    page_count=page_count,
+                )
+            except Exception:
+                logger.exception(
+                    "PDF batch parse failed for %s pages %d-%d",
+                    file_path,
+                    start_page + 1,
+                    end_page,
+                )
+                yield ParsedChunkBatch(
+                    chunks=[], is_partial=True, page_count=page_count
+                )

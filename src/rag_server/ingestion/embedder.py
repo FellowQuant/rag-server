@@ -13,10 +13,11 @@ Key design decisions:
 - Empty content strings return a zero dense vector and empty sparse vectors
   rather than crashing, so the pipeline can still store the chunk.
 """
+
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 from FlagEmbedding import BGEM3FlagModel
@@ -25,26 +26,28 @@ from rag_server.ingestion.chunker import ParsedChunk
 
 logger = logging.getLogger(__name__)
 
-DENSE_DIM = 1024          # BGE-M3 dense output dimensionality
-DEFAULT_BATCH_SIZE = 8    # Reduce to 4 if CUDA OOM during embedding
-MAX_LENGTH = 512          # Token limit per chunk (matches chunker.MAX_TOKENS)
+DENSE_DIM = 1024  # BGE-M3 dense output dimensionality
+DEFAULT_BATCH_SIZE = 8  # Reduce to 4 if CUDA OOM during embedding
+MAX_LENGTH = 512  # Token limit per chunk (matches chunker.MAX_TOKENS)
 
 
 @dataclass
 class EmbeddingResult:
     """Dense + sparse vectors for a single chunk, ready for Qdrant upsert."""
+
     chunk_index: int
-    dense_vector: list[float]       # 1024-dimensional float list
-    sparse_indices: list[int]       # BGE-M3 lexical weight token IDs (raw ints)
-    sparse_values: list[float]      # Corresponding lexical weight floats
+    dense_vector: list[float]  # 1024-dimensional float list
+    sparse_indices: list[int]  # BGE-M3 lexical weight token IDs (raw ints)
+    sparse_values: list[float]  # Corresponding lexical weight floats
 
 
 @dataclass
 class QueryEmbedding:
     """Dense + sparse vectors for a single query string, ready for Qdrant search."""
-    dense_vector: list[float]       # 1024-dimensional float list
-    sparse_indices: list[int]       # BGE-M3 lexical weight token IDs (raw ints)
-    sparse_values: list[float]      # Corresponding lexical weight floats
+
+    dense_vector: list[float]  # 1024-dimensional float list
+    sparse_indices: list[int]  # BGE-M3 lexical weight token IDs (raw ints)
+    sparse_values: list[float]  # Corresponding lexical weight floats
 
 
 class Embedder:
@@ -125,7 +128,7 @@ class Embedder:
                     return_sparse=True,
                     return_colbert_vecs=False,  # not used in Phase 2; saves VRAM
                 )
-                dense_vecs: np.ndarray = output["dense_vecs"]        # shape (N, 1024)
+                dense_vecs: np.ndarray = output["dense_vecs"]  # shape (N, 1024)
                 lexical_weights: list[dict[int, float]] = output["lexical_weights"]
 
                 for result_pos, original_idx in enumerate(non_empty_indices):
@@ -172,6 +175,7 @@ class Embedder:
             )
 
         import torch
+
         try:
             output = self._model.encode_queries(
                 [query],

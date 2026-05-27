@@ -24,6 +24,7 @@ Reference:
 - https://docs.aws.amazon.com/boto3/latest/reference/services/bedrock-runtime/client/converse_stream.html
 - https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-examples.html
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -47,10 +48,12 @@ def _to_bedrock_messages(messages: list[dict]) -> list[dict]:
     for msg in messages:
         if msg["role"] == "system":
             continue  # system handled separately in Converse API
-        converted.append({
-            "role": msg["role"],
-            "content": [{"text": msg["content"]}],
-        })
+        converted.append(
+            {
+                "role": msg["role"],
+                "content": [{"text": msg["content"]}],
+            }
+        )
     return converted
 
 
@@ -76,6 +79,7 @@ class BedrockProvider(LLMProvider):
         boto3 automatically uses the standard AWS credential chain.
         """
         import boto3
+
         return boto3.client("bedrock-runtime", region_name=self._region)
 
     async def complete(self, messages: list[dict], system: str = "") -> str:
@@ -94,7 +98,9 @@ class BedrockProvider(LLMProvider):
 
         return await asyncio.to_thread(_call)
 
-    async def stream(self, messages: list[dict], system: str = "") -> AsyncIterator[str]:
+    async def stream(
+        self, messages: list[dict], system: str = ""
+    ) -> AsyncIterator[str]:
         """Streaming completion via Bedrock ConverseStream API.
 
         IMPORTANT: boto3 event stream iteration is synchronous. Entire collection

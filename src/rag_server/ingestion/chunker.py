@@ -1,7 +1,8 @@
 """Shared data types and chunking utilities for the ingestion pipeline."""
+
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import tiktoken
 
@@ -21,13 +22,23 @@ class ParsedChunk:
     field for code chunks. chunk_index is assigned by the parser after all
     chunks are collected.
     """
-    chunk_type: str           # "text" | "formula" | "table" | "code"
-    content: str              # text sent to the embedding model
+
+    chunk_type: str  # "text" | "formula" | "table" | "code"
+    content: str  # text sent to the embedding model
     display_content: str | None = None  # raw LaTeX for formulas; code source for code
     page_number: int | None = None
     section_heading: str | None = None
     chunk_index: int = 0
-    language: str | None = None       # populated for code chunks only
+    language: str | None = None  # populated for code chunks only
+
+
+@dataclass
+class ParsedChunkBatch:
+    """A bounded group of parsed chunks emitted by a parser."""
+
+    chunks: list[ParsedChunk]
+    is_partial: bool = False
+    page_count: int | None = None
 
 
 def split_text_tokens(

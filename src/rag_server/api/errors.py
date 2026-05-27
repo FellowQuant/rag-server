@@ -3,6 +3,7 @@
 Replaces FastAPI's default error responses (plain {detail: ...}) with the
 standardized Problem Details shape: {type, title, status, detail}.
 """
+
 import logging
 
 from fastapi import FastAPI
@@ -38,17 +39,20 @@ def _problem(status: int, detail: str) -> JSONResponse:
     )
 
 
-async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+async def http_exception_handler(
+    request: Request, exc: StarletteHTTPException
+) -> JSONResponse:
     """Handle Starlette/FastAPI HTTPException as RFC 7807 Problem Details."""
     detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
     return _problem(exc.status_code, detail)
 
 
-async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
     """Handle Pydantic RequestValidationError as RFC 7807 Problem Details (422)."""
     detail = "; ".join(
-        f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}"
-        for e in exc.errors()
+        f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}" for e in exc.errors()
     )
     return _problem(422, detail)
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from rag_server.ingestion.parsers.epub_parser import parse_epub
+from rag_server.ingestion.parsers.epub_parser import iter_epub_batches, parse_epub
 
 
 def _write_epub(path: Path, *, missing_spine_item: bool = False) -> None:
@@ -113,6 +113,22 @@ def test_parse_epub_preserves_spine_order_and_chunk_metadata(tmp_path: Path) -> 
     )
 
 
+def test_iter_epub_batches_emits_one_batch_per_spine_item(tmp_path: Path) -> None:
+    epub_path = tmp_path / "quant.epub"
+    _write_epub(epub_path)
+
+    batches = list(iter_epub_batches(epub_path))
+
+    assert len(batches) == 2
+    assert all(batch.is_partial is False for batch in batches)
+    assert any(
+        "Sharpe ratio measures excess return" in chunk.content
+        for chunk in batches[0].chunks
+    )
+    assert any("Backtesting code" in chunk.content for chunk in batches[1].chunks)
+    assert all(chunk.page_number is None for batch in batches for chunk in batch.chunks)
+
+
 def test_parse_epub_marks_partial_when_a_spine_item_is_missing(tmp_path: Path) -> None:
     epub_path = tmp_path / "partial.epub"
     _write_epub(epub_path, missing_spine_item=True)
@@ -127,6 +143,17 @@ def test_parse_epub_marks_partial_when_a_spine_item_is_missing(tmp_path: Path) -
         "Backtesting code should avoid lookahead bias" in chunk.content
         for chunk in chunks
     )
+
+
+def test_iter_epub_batches_marks_missing_spine_item_partial(tmp_path: Path) -> None:
+    epub_path = tmp_path / "partial.epub"
+    _write_epub(epub_path, missing_spine_item=True)
+
+    batches = list(iter_epub_batches(epub_path))
+
+    assert len(batches) == 3
+    assert batches[1].chunks == []
+    assert batches[1].is_partial is True
 
 
 def test_parse_epub_rejects_malformed_epub(tmp_path: Path) -> None:

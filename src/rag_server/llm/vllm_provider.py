@@ -13,6 +13,7 @@ Key notes:
 
 Reference: https://docs.vllm.ai/en/latest/serving/openai_compatible_server/
 """
+
 from __future__ import annotations
 
 import logging
@@ -56,7 +57,9 @@ class VLLMProvider(LLMProvider):
         )
         return response.choices[0].message.content or ""
 
-    async def stream(self, messages: list[dict], system: str = "") -> AsyncIterator[str]:
+    async def stream(
+        self, messages: list[dict], system: str = ""
+    ) -> AsyncIterator[str]:
         """Streaming completion. Yields token delta strings."""
         full_messages = self._build_messages(messages, system)
         stream = await self._client.chat.completions.create(

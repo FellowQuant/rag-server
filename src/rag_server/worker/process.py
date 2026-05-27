@@ -58,7 +58,10 @@ def worker_main(
 
     from rag_server.ingestion.embedder import Embedder
 
-    embedder = Embedder()
+    from rag_server.config import get_settings
+
+    settings = get_settings()
+    embedder = Embedder(batch_size=settings.indexer_embed_batch_size)
     try:
         embedder.load()
     except Exception:

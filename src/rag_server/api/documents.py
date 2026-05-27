@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 
 import aiofiles
@@ -48,11 +49,63 @@ ALLOWED_EXTENSIONS: dict[str, str] = {
 }
 
 
+@dataclass(frozen=True)
+class StreamedUpload:
+    temp_path: Path
+    file_hash: str
+    file_size: int
+
+
 def _get_uploads_dir() -> Path:
     settings = get_settings()
     uploads = settings.data_dir / "uploads"
     uploads.mkdir(parents=True, exist_ok=True)
     return uploads
+
+
+async def _stream_upload_to_temp(
+    file: UploadFile,
+    uploads_dir: Path,
+    suffix: str,
+    *,
+    max_upload_size: int,
+    chunk_size: int,
+) -> StreamedUpload:
+    """Stream an UploadFile to DATA_DIR/uploads/.tmp while hashing it."""
+    tmp_dir = uploads_dir / ".tmp"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    temp_path = tmp_dir / f"{uuid.uuid4().hex}{suffix}"
+
+    digest = hashlib.sha256()
+    file_size = 0
+
+    try:
+        async with aiofiles.open(temp_path, "wb") as f:
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                file_size += len(chunk)
+                if file_size > max_upload_size:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=(
+                            f"Upload size exceeds limit of {max_upload_size} bytes. "
+                            "Set MAX_UPLOAD_SIZE env var to increase."
+                        ),
+                    )
+                digest.update(chunk)
+                await f.write(chunk)
+    except Exception:
+        if temp_path.exists():
+            temp_path.unlink()
+        raise
+
+    return StreamedUpload(
+        temp_path=temp_path,
+        file_hash=digest.hexdigest(),
+        file_size=file_size,
+    )
 
 
 @router.post("", status_code=202, response_model=DocumentUploadResponse)
@@ -84,26 +137,36 @@ async def upload_document(
             detail=f"Unsupported file type '{suffix}'. Allowed: .pdf, .tex, .ipynb, .epub",
         )
 
-    contents = await file.read()
-    file_hash = hashlib.sha256(contents).hexdigest()
-    file_size = len(contents)
     file_format = ALLOWED_EXTENSIONS[suffix]
+    settings = get_settings()
+    uploads_dir = _get_uploads_dir()
+    streamed = await _stream_upload_to_temp(
+        file,
+        uploads_dir,
+        suffix,
+        max_upload_size=settings.max_upload_size,
+        chunk_size=settings.indexer_upload_chunk_bytes,
+    )
+    file_hash = streamed.file_hash
+    file_size = streamed.file_size
 
     # Check for duplicate file hash.
     existing = await db.execute(select(Document).where(Document.file_hash == file_hash))
     existing_doc = existing.scalar_one_or_none()
     if existing_doc is not None:
+        if streamed.temp_path.exists():
+            streamed.temp_path.unlink()
         raise HTTPException(
             status_code=409,
             detail=f"Document already exists with id={existing_doc.id} status={existing_doc.status}",
         )
 
     # Save file to disk using hash as filename (enables deduplication).
-    uploads_dir = _get_uploads_dir()
     dest = uploads_dir / f"{file_hash}{suffix}"
     if not dest.exists():
-        async with aiofiles.open(dest, "wb") as f:
-            await f.write(contents)
+        streamed.temp_path.replace(dest)
+    elif streamed.temp_path.exists():
+        streamed.temp_path.unlink()
 
     # Create Document record.
     doc_id = str(uuid.uuid4())
@@ -120,7 +183,6 @@ async def upload_document(
     await db.commit()  # make row durable before enqueue() — worker must see it
 
     # Enqueue ingestion job.
-    settings = get_settings()
     job = IngestionJob(
         document_id=doc_id,
         file_path=str(dest),

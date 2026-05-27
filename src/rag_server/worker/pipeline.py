@@ -35,9 +35,11 @@ from typing import TYPE_CHECKING
 from sqlalchemy import create_engine, delete
 from sqlalchemy.orm import Session
 
+from rag_server.config import get_settings
 from rag_server.database.models import Chunk, Document
-from rag_server.ingestion.chunker import ParsedChunk
+from rag_server.ingestion.chunker import ParsedChunk, ParsedChunkBatch
 from rag_server.ingestion.embedder import Embedder
+from rag_server.worker.resource_guard import ResourceGuard
 
 if TYPE_CHECKING:
     from docling.document_converter import DocumentConverter
@@ -131,7 +133,54 @@ def _dispatch_parser(
         raise ValueError(f"Unsupported file_format: {file_format!r}")
 
 
-def _upsert_chunks_qdrant(
+def _dispatch_parser_batches(
+    file_format: str,
+    file_path: str,
+    converter: "DocumentConverter | None" = None,
+):
+    settings = get_settings()
+    if file_format == "pdf":
+        from rag_server.ingestion.parsers.pdf_parser import iter_pdf_batches
+
+        if converter is None:
+            from rag_server.ingestion.parsers.pdf_parser import make_converter
+
+            converter = make_converter(use_gpu=True)
+
+        _log_mem("before-convert")
+        for batch in iter_pdf_batches(
+            file_path,
+            converter,
+            pages_per_batch=settings.indexer_pdf_pages_per_batch,
+            large_file_bytes=settings.indexer_large_file_bytes,
+        ):
+            yield batch
+            gc.collect()
+            try:
+                import torch
+
+                torch.cuda.empty_cache()
+            except Exception:
+                pass
+            _log_mem("after-convert-batch-gc")
+        return
+
+    if file_format == "epub":
+        from rag_server.ingestion.parsers.epub_parser import iter_epub_batches
+
+        yield from iter_epub_batches(file_path)
+        return
+
+    chunks, is_partial = _dispatch_parser(file_format, file_path, converter)
+    page_numbers = [c.page_number for c in chunks if c.page_number is not None]
+    yield ParsedChunkBatch(
+        chunks=chunks,
+        is_partial=is_partial,
+        page_count=max(page_numbers) if page_numbers else None,
+    )
+
+
+def _upsert_chunk_batch_qdrant(
     document_id: str,
     chunks: list[ParsedChunk],
     chunk_ids: list[str],
@@ -192,6 +241,24 @@ def _upsert_chunks_qdrant(
             client.upsert(collection_name=collection, points=points, wait=True)
     finally:
         client.close()
+
+
+def _upsert_chunks_qdrant(
+    document_id: str,
+    chunks: list[ParsedChunk],
+    chunk_ids: list[str],
+    embedder: Embedder,
+    qdrant_url: str,
+    collection: str,
+) -> None:
+    _upsert_chunk_batch_qdrant(
+        document_id=document_id,
+        chunks=chunks,
+        chunk_ids=chunk_ids,
+        embedder=embedder,
+        qdrant_url=qdrant_url,
+        collection=collection,
+    )
 
 
 def _delete_qdrant_document(document_id: str, qdrant_url: str, collection: str) -> None:
@@ -257,6 +324,7 @@ def run_pipeline(
     converter: "DocumentConverter | None",
     embedder: Embedder,
     result_queue: multiprocessing.Queue | None = None,
+    resource_guard: ResourceGuard | None = None,
 ) -> None:
     """Execute the full ingestion pipeline for one IngestionJob.
 
@@ -273,6 +341,8 @@ def run_pipeline(
     """
     document_id = job.document_id
     engine = _get_sync_engine(job.sqlite_url)
+    if resource_guard is None:
+        resource_guard = ResourceGuard.from_settings(get_settings())
 
     logger.info(
         "Pipeline: starting job for document %s (%s)", document_id, job.file_format
@@ -283,63 +353,82 @@ def run_pipeline(
     _set_document_status(document_id, "indexing", engine)
 
     try:
-        # Step 2: Parse document.
-        parsed_chunks, is_partial = _dispatch_parser(
+        total_chunks = 0
+        next_chunk_index = 0
+        is_partial = False
+        max_page_count: int | None = None
+
+        resource_guard.checkpoint("before-parse-batch")
+        for batch in _dispatch_parser_batches(
             job.file_format, job.file_path, converter
-        )
+        ):
+            resource_guard.checkpoint("after-parse")
+            parsed_chunks = batch.chunks
+            if batch.is_partial:
+                is_partial = True
+            if batch.page_count is not None:
+                max_page_count = max(max_page_count or 0, batch.page_count)
+
+            for chunk in parsed_chunks:
+                chunk.chunk_index = next_chunk_index
+                next_chunk_index += 1
+
+            if not parsed_chunks:
+                resource_guard.checkpoint("before-parse-batch")
+                continue
+
+            # Generate chunk UUIDs as a parallel list.
+            # IMPORTANT: We do NOT monkey-patch ParsedChunk instances with extra
+            # attributes. The dataclass contract must not be bypassed. Instead we
+            # maintain chunk_ids as a parallel list in the same order as parsed_chunks.
+            chunk_ids: list[str] = [str(uuid.uuid4()) for _ in parsed_chunks]
+
+            # Persist Chunk rows to SQLite using the pre-generated IDs.
+            with Session(engine) as session:
+                for chunk, chunk_id in zip(parsed_chunks, chunk_ids):
+                    row = Chunk(
+                        id=chunk_id,
+                        document_id=document_id,
+                        chunk_index=chunk.chunk_index,
+                        page_number=chunk.page_number,
+                        section_heading=chunk.section_heading,
+                        chunk_type=chunk.chunk_type,
+                        content=chunk.content,
+                        display_content=chunk.display_content,
+                    )
+                    session.add(row)
+                session.commit()
+            total_chunks += len(parsed_chunks)
+            logger.info(
+                "Pipeline: %d chunks written to SQLite for %s",
+                len(parsed_chunks),
+                document_id,
+            )
+            resource_guard.checkpoint("after-sqlite-write")
+
+            # Embed chunks and upsert to Qdrant.
+            # chunk_ids is passed as a parallel structure -- no monkey-patching.
+            _upsert_chunk_batch_qdrant(
+                document_id=document_id,
+                chunks=parsed_chunks,
+                chunk_ids=chunk_ids,
+                embedder=embedder,
+                qdrant_url=job.qdrant_url,
+                collection=job.qdrant_collection,
+            )
+            logger.info("Pipeline: Qdrant upsert complete for %s", document_id)
+            resource_guard.checkpoint("after-qdrant-upsert")
+            gc.collect()
+            resource_guard.checkpoint("before-parse-batch")
+
         _log_mem("after-parse")
-        if not parsed_chunks:
+        if total_chunks == 0:
             logger.warning("Pipeline: parser returned 0 chunks for %s", document_id)
 
-        # Step 3: Generate chunk UUIDs as a parallel list.
-        # IMPORTANT: We do NOT monkey-patch ParsedChunk instances with extra
-        # attributes. The dataclass contract must not be bypassed. Instead we
-        # maintain chunk_ids as a parallel list in the same order as parsed_chunks.
-        chunk_ids: list[str] = [str(uuid.uuid4()) for _ in parsed_chunks]
-
-        # Step 4: Persist Chunk rows to SQLite using the pre-generated IDs.
-        with Session(engine) as session:
-            for chunk, chunk_id in zip(parsed_chunks, chunk_ids):
-                row = Chunk(
-                    id=chunk_id,
-                    document_id=document_id,
-                    chunk_index=chunk.chunk_index,
-                    page_number=chunk.page_number,
-                    section_heading=chunk.section_heading,
-                    chunk_type=chunk.chunk_type,
-                    content=chunk.content,
-                    display_content=chunk.display_content,
-                )
-                session.add(row)
-            session.commit()
-        logger.info(
-            "Pipeline: %d chunks written to SQLite for %s",
-            len(parsed_chunks),
-            document_id,
-        )
-        _log_mem("after-sqlite-write")
-
-        # Step 5: Embed chunks and upsert to Qdrant.
-        # chunk_ids is passed as a parallel structure -- no monkey-patching.
-        _upsert_chunks_qdrant(
-            document_id=document_id,
-            chunks=parsed_chunks,
-            chunk_ids=chunk_ids,
-            embedder=embedder,
-            qdrant_url=job.qdrant_url,
-            collection=job.qdrant_collection,
-        )
-        logger.info("Pipeline: Qdrant upsert complete for %s", document_id)
-        _log_mem("after-qdrant-upsert")
-
-        # Step 6: Update page_count on Document (count unique page numbers).
-        unique_pages = {
-            c.page_number for c in parsed_chunks if c.page_number is not None
-        }
         with Session(engine) as session:
             doc = session.get(Document, document_id)
-            if doc and unique_pages:
-                doc.page_count = max(unique_pages)
+            if doc and max_page_count is not None:
+                doc.page_count = max_page_count
             session.commit()
 
         # Step 7: Mark indexed or indexed_partial.
@@ -357,14 +446,14 @@ def run_pipeline(
             logger.warning(
                 "Pipeline: document %s indexed_partial (%d chunks)",
                 document_id,
-                len(parsed_chunks),
+                total_chunks,
             )
         else:
             _set_document_status(document_id, "indexed", engine)
             logger.info(
                 "Pipeline: document %s indexed successfully (%d chunks)",
                 document_id,
-                len(parsed_chunks),
+                total_chunks,
             )
 
         # Signal FastAPI to rebuild BM25 index with newly indexed chunks.

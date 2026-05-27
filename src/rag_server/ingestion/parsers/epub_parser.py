@@ -17,7 +17,7 @@ from xml.etree import ElementTree
 from docling.datamodel.base_models import ConversionStatus, InputFormat
 from docling.document_converter import DocumentConverter
 
-from rag_server.ingestion.chunker import ParsedChunk
+from rag_server.ingestion.chunker import ParsedChunk, ParsedChunkBatch
 from rag_server.ingestion.parsers.docling_chunks import chunks_from_docling_document
 
 logger = logging.getLogger(__name__)
@@ -116,16 +116,27 @@ def _spine_members(opf_root: ElementTree.Element, opf_path: str) -> list[str]:
     return members
 
 
-def parse_epub(file_path: str | Path) -> tuple[list[ParsedChunk], bool]:
-    """Parse an EPUB file into typed ParsedChunk objects.
+def _teardown_conversion_result(result) -> None:
+    """Release Docling result references after each spine item is chunked."""
+    try:
+        result.document = None
+        if hasattr(result, "errors"):
+            result.errors.clear()
+        if hasattr(result, "timings"):
+            result.timings.clear()
+    except Exception as exc:
+        logger.debug("EPUB conversion cleanup skipped: %s", exc)
 
-    EPUB has no stable page model, so page_number remains None for all chunks.
-    Missing or failed spine items mark the document partial if at least one
-    supported spine item is parsed successfully.
+
+def iter_epub_batches(file_path: str | Path):
+    """Yield parsed EPUB content one spine item at a time.
+
+    EPUB files are zip archives of HTML/XHTML chapters. Processing each spine
+    item independently bounds memory use and lets the ingestion pipeline persist
+    and embed a chapter before loading the next one.
     """
     path = Path(file_path)
-    parsed_chunks: list[ParsedChunk] = []
-    is_partial = False
+    emitted_chunks = False
 
     try:
         with zipfile.ZipFile(path) as zf, tempfile.TemporaryDirectory() as tmp:
@@ -145,9 +156,10 @@ def parse_epub(file_path: str | Path) -> tuple[list[ParsedChunk], bool]:
                     logger.warning(
                         "EPUB spine item missing: %s", member or "<unresolved>"
                     )
-                    is_partial = True
+                    yield ParsedChunkBatch(chunks=[], is_partial=True)
                     continue
 
+                result = None
                 try:
                     suffix = Path(member).suffix or ".xhtml"
                     chapter_path = tmp_dir / f"spine_{idx:04d}{suffix}"
@@ -155,27 +167,46 @@ def parse_epub(file_path: str | Path) -> tuple[list[ParsedChunk], bool]:
                     result = converter.convert(str(chapter_path), raises_on_error=False)
                     if result.status == ConversionStatus.FAILURE:
                         logger.warning("Docling HTML conversion failed for %s", member)
-                        is_partial = True
+                        yield ParsedChunkBatch(chunks=[], is_partial=True)
                         continue
-                    if result.status == ConversionStatus.PARTIAL_SUCCESS:
-                        is_partial = True
 
-                    parsed_chunks.extend(
-                        chunks_from_docling_document(
-                            result.document,
-                            include_title_as_heading=True,
-                            preserve_page_numbers=False,
-                        )
+                    chunks = chunks_from_docling_document(
+                        result.document,
+                        include_title_as_heading=True,
+                        preserve_page_numbers=False,
+                    )
+                    emitted_chunks = emitted_chunks or bool(chunks)
+                    yield ParsedChunkBatch(
+                        chunks=chunks,
+                        is_partial=result.status == ConversionStatus.PARTIAL_SUCCESS,
                     )
                 except Exception:
                     logger.exception("Failed to parse EPUB spine item %s", member)
-                    is_partial = True
+                    yield ParsedChunkBatch(chunks=[], is_partial=True)
                     continue
+                finally:
+                    if result is not None:
+                        _teardown_conversion_result(result)
     except zipfile.BadZipFile as exc:
         raise ValueError(f"Invalid EPUB archive: {path}") from exc
 
-    if not parsed_chunks:
+    if not emitted_chunks:
         raise ValueError("EPUB produced no parseable chunks")
+
+
+def parse_epub(file_path: str | Path) -> tuple[list[ParsedChunk], bool]:
+    """Parse an EPUB file into typed ParsedChunk objects.
+
+    EPUB has no stable page model, so page_number remains None for all chunks.
+    Missing or failed spine items mark the document partial if at least one
+    supported spine item is parsed successfully.
+    """
+    parsed_chunks: list[ParsedChunk] = []
+    is_partial = False
+
+    for batch in iter_epub_batches(file_path):
+        parsed_chunks.extend(batch.chunks)
+        is_partial = is_partial or batch.is_partial
 
     for idx, chunk in enumerate(parsed_chunks):
         chunk.chunk_index = idx

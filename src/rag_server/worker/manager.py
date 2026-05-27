@@ -93,6 +93,15 @@ class WorkerManager:
         self._queue.put_nowait(job)
         logger.debug("WorkerManager: enqueued job for document %s", job.document_id)
 
+    def enqueue_blocking(self, job: IngestionJob) -> None:
+        """Add an ingestion job and wait if the worker queue is temporarily full."""
+        if self._queue is None:
+            raise RuntimeError("WorkerManager.start() must be called before enqueue()")
+        self._queue.put(job, block=True)
+        logger.debug(
+            "WorkerManager: enqueued recovery job for document %s", job.document_id
+        )
+
     def stop(self) -> None:
         """Stop the worker process gracefully. Call from FastAPI lifespan shutdown.
 

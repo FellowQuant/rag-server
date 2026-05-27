@@ -11,13 +11,14 @@ create_provider(settings).
 Bedrock note: messages use OpenAI role/content format here; BedrockProvider
 converts internally to the Converse API format {role, content: [{text: ...}]}.
 """
+
 from __future__ import annotations
 
 import abc
 import logging
 from typing import AsyncIterator
 
-from rag_server.llm.config import LLMConfig, LLMSettings
+from rag_server.llm.config import LLMConfig
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,9 @@ class LLMProvider(abc.ABC):
         ...
 
     @abc.abstractmethod
-    async def stream(self, messages: list[dict], system: str = "") -> AsyncIterator[str]:
+    async def stream(
+        self, messages: list[dict], system: str = ""
+    ) -> AsyncIterator[str]:
         """Yield token deltas as they arrive from the provider.
 
         Args:
@@ -84,17 +87,28 @@ def create_provider(config: LLMConfig) -> LLMProvider:
 
     if provider == "vllm":
         from rag_server.llm.vllm_provider import VLLMProvider
-        logger.info("LLM provider: vLLM at %s (model=%s)", config.base_url, config.model)
+
+        logger.info(
+            "LLM provider: vLLM at %s (model=%s)", config.base_url, config.model
+        )
         return VLLMProvider(base_url=config.base_url, model=config.model)
 
     elif provider == "llamacpp":
         from rag_server.llm.llamacpp_provider import LlamaCppProvider
-        logger.info("LLM provider: llama.cpp at %s (model=%s)", config.base_url, config.model)
+
+        logger.info(
+            "LLM provider: llama.cpp at %s (model=%s)", config.base_url, config.model
+        )
         return LlamaCppProvider(base_url=config.base_url, model=config.model)
 
     elif provider == "bedrock":
         from rag_server.llm.bedrock_provider import BedrockProvider
-        logger.info("LLM provider: AWS Bedrock (model=%s, region=%s)", config.model, config.region)
+
+        logger.info(
+            "LLM provider: AWS Bedrock (model=%s, region=%s)",
+            config.model,
+            config.region,
+        )
         return BedrockProvider(model=config.model, region=config.region)
 
     else:

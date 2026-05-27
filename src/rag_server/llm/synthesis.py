@@ -10,6 +10,7 @@ This module bridges Phase 3 (retrieval) and the LLM providers:
 
 The engine is provider-agnostic — it calls only provider.complete() and provider.stream().
 """
+
 from __future__ import annotations
 
 import logging
@@ -35,16 +36,16 @@ logger = logging.getLogger(__name__)
 # Group 1: filename (everything before optional page spec)
 # Group 2: page number (digits only, optional)
 _CITATION_RE = re.compile(
-    r'\[Source:\s*([^,\]\n]+?)(?:[,\s]+p\.?\s*(\d+))?\]',
+    r"\[Source:\s*([^,\]\n]+?)(?:[,\s]+p\.?\s*(\d+))?\]",
     re.IGNORECASE,
 )
 
 # Strips inline citation markers from answer text (eats preceding whitespace to
 # avoid leaving dangling spaces before punctuation).
-_CITATION_STRIP_RE = re.compile(r'\s*\[Source:\s*[^\]]+\]', re.IGNORECASE)
+_CITATION_STRIP_RE = re.compile(r"\s*\[Source:\s*[^\]]+\]", re.IGNORECASE)
 
 # Strips the LLM-generated "## Sources" bibliography section appended at end of answer.
-_SOURCES_SECTION_RE = re.compile(r'\n{0,2}##\s*Sources\b.*$', re.DOTALL | re.IGNORECASE)
+_SOURCES_SECTION_RE = re.compile(r"\n{0,2}##\s*Sources\b.*$", re.DOTALL | re.IGNORECASE)
 
 _USER_PROMPT_TEMPLATE = """\
 ## Retrieved Context
@@ -195,12 +196,14 @@ class SynthesisEngine:
         chunk_by_page: dict[tuple[str, int], ChunkResult] = {}
         for chunk in chunks:
             if chunk.page_number is not None:
-                chunk_by_page.setdefault((chunk.source_filename, chunk.page_number), chunk)
+                chunk_by_page.setdefault(
+                    (chunk.source_filename, chunk.page_number), chunk
+                )
 
         sources: list[SourceItem] = []
         seen_sources: set[tuple[str, int | None]] = set()
 
-        for (raw_name, cited_page) in cited:
+        for raw_name, cited_page in cited:
             # Resolve filename: exact match first, then suffix match
             matched_list = chunks_by_filename.get(raw_name)
             resolved_name = raw_name
@@ -223,16 +226,22 @@ class SynthesisEngine:
             seen_sources.add(source_key)
 
             # Look up metadata chunk for this exact (filename, page) if available
-            meta_chunk = chunk_by_page.get((resolved_name, page)) if page is not None else matched_list[0]
+            meta_chunk = (
+                chunk_by_page.get((resolved_name, page))
+                if page is not None
+                else matched_list[0]
+            )
             if meta_chunk is None:
                 meta_chunk = matched_list[0]
 
-            sources.append(SourceItem(
-                filename=resolved_name,
-                page_number=page,
-                section_heading=meta_chunk.section_heading,
-                chunk_type=meta_chunk.chunk_type,
-            ))
+            sources.append(
+                SourceItem(
+                    filename=resolved_name,
+                    page_number=page,
+                    section_heading=meta_chunk.section_heading,
+                    chunk_type=meta_chunk.chunk_type,
+                )
+            )
 
         # Fallback: zero citations extracted
         if not sources and chunks:
@@ -246,12 +255,14 @@ class SynthesisEngine:
                 key = (chunk.source_filename, chunk.page_number)
                 if key not in seen_fallback:
                     seen_fallback.add(key)
-                    sources.append(SourceItem(
-                        filename=chunk.source_filename,
-                        page_number=chunk.page_number,
-                        section_heading=chunk.section_heading,
-                        chunk_type=chunk.chunk_type,
-                    ))
+                    sources.append(
+                        SourceItem(
+                            filename=chunk.source_filename,
+                            page_number=chunk.page_number,
+                            section_heading=chunk.section_heading,
+                            chunk_type=chunk.chunk_type,
+                        )
+                    )
 
         # Strip the LLM-appended "## Sources" section, then inline markers.
         clean_answer = _SOURCES_SECTION_RE.sub("", answer).rstrip()
@@ -339,7 +350,8 @@ class SynthesisEngine:
                 last_error = exc
                 if attempt_num < 3:
                     import asyncio
-                    wait_seconds = min(2 ** attempt_num, 10)
+
+                    wait_seconds = min(2**attempt_num, 10)
                     logger.warning(
                         "stream_synthesize: attempt %d failed (%s), retrying in %ds",
                         attempt_num,

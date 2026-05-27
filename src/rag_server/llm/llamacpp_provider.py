@@ -11,6 +11,7 @@ separate class to:
 
 Reference: https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md
 """
+
 from __future__ import annotations
 
 import logging
@@ -36,7 +37,9 @@ class LlamaCppProvider(LLMProvider):
         """
         self._client = AsyncOpenAI(base_url=base_url, api_key="EMPTY")
         self._model = model
-        logger.debug("LlamaCppProvider initialized: base_url=%s model=%s", base_url, model)
+        logger.debug(
+            "LlamaCppProvider initialized: base_url=%s model=%s", base_url, model
+        )
 
     def _build_messages(self, messages: list[dict], system: str) -> list[dict]:
         if system:
@@ -52,7 +55,9 @@ class LlamaCppProvider(LLMProvider):
         )
         return response.choices[0].message.content or ""
 
-    async def stream(self, messages: list[dict], system: str = "") -> AsyncIterator[str]:
+    async def stream(
+        self, messages: list[dict], system: str = ""
+    ) -> AsyncIterator[str]:
         full_messages = self._build_messages(messages, system)
         stream_resp = await self._client.chat.completions.create(
             model=self._model,

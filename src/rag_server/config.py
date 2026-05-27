@@ -39,11 +39,43 @@ class Settings(BaseSettings):
         default=100 * 1024 * 1024
     )  # 100MB; set MAX_UPLOAD_SIZE env var to override
 
+    indexer_upload_chunk_bytes: int = Field(
+        default=1024 * 1024,
+        alias="INDEXER_UPLOAD_CHUNK_BYTES",
+        validation_alias="INDEXER_UPLOAD_CHUNK_BYTES",
+    )
+
     # Device for retrieval models in the FastAPI process.
     # "auto" = use CUDA if available, else CPU.
     # Set RERANKER_DEVICE=cpu to free ~1.2 GB VRAM when running alongside a large LLM.
     reranker_device: str = Field(
         default="auto", alias="RERANKER_DEVICE", validation_alias="RERANKER_DEVICE"
+    )
+
+    indexer_worker_rss_soft_limit_mb: int = Field(
+        default=0,
+        alias="INDEXER_WORKER_RSS_SOFT_LIMIT_MB",
+        validation_alias="INDEXER_WORKER_RSS_SOFT_LIMIT_MB",
+    )
+    indexer_min_available_ram_mb: int = Field(
+        default=2048,
+        alias="INDEXER_MIN_AVAILABLE_RAM_MB",
+        validation_alias="INDEXER_MIN_AVAILABLE_RAM_MB",
+    )
+    indexer_large_file_bytes: int = Field(
+        default=16 * 1024 * 1024,
+        alias="INDEXER_LARGE_FILE_BYTES",
+        validation_alias="INDEXER_LARGE_FILE_BYTES",
+    )
+    indexer_pdf_pages_per_batch: int = Field(
+        default=25,
+        alias="INDEXER_PDF_PAGES_PER_BATCH",
+        validation_alias="INDEXER_PDF_PAGES_PER_BATCH",
+    )
+    indexer_embed_batch_size: int = Field(
+        default=8,
+        alias="INDEXER_EMBED_BATCH_SIZE",
+        validation_alias="INDEXER_EMBED_BATCH_SIZE",
     )
 
     @field_validator("data_dir", mode="before")

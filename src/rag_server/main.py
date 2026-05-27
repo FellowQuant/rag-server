@@ -36,6 +36,7 @@ from rag_server.retrieval.engine import RetrievalEngine
 from rag_server.retrieval.reranker import Reranker
 from rag_server.vector_store.qdrant import QdrantStore
 from rag_server.worker.manager import WorkerManager
+from rag_server.worker.recovery import recover_interrupted_documents
 from rag_server.mcp_server import create_http_mcp_app
 
 logger = logging.getLogger(__name__)
@@ -111,6 +112,16 @@ async def rag_lifespan(app: FastAPI):
     worker_manager = WorkerManager()
     worker_manager.start()
     app.state.worker_manager = worker_manager
+
+    async with async_session() as session:
+        recovered = await recover_interrupted_documents(
+            session,
+            worker_manager,
+            settings,
+            qdrant_store,
+        )
+    if recovered:
+        logger.info("Startup recovery enqueued %d document(s)", recovered)
 
     # Initialize BM25 index.
     bm25_pkl = settings.data_dir / "bm25.pkl"

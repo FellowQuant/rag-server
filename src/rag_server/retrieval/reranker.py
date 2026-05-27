@@ -19,6 +19,7 @@ process. Shared GPU steady-state peak = ~2.2 GB. Monitor VRAM under load.
 Threading: compute_scores() is synchronous and GPU-bound. Always call via:
     scores = await asyncio.to_thread(reranker.compute_scores, query, documents)
 """
+
 from __future__ import annotations
 
 import logging
@@ -85,10 +86,14 @@ class Reranker:
             self.MODEL_ID,
             padding_side="left",
         )
-        self._model = AutoModelForCausalLM.from_pretrained(
-            self.MODEL_ID,
-            torch_dtype=torch.float16,
-        ).to(device).eval()
+        self._model = (
+            AutoModelForCausalLM.from_pretrained(
+                self.MODEL_ID,
+                torch_dtype=torch.float16,
+            )
+            .to(device)
+            .eval()
+        )
 
         # Resolve yes/no token IDs once at load time.
         self._token_true_id = self._tokenizer.convert_tokens_to_ids("yes")
@@ -98,7 +103,7 @@ class Reranker:
         # The prompt structure mirrors the official Qwen3-Reranker README exactly.
         prefix = (
             "<|im_start|>system\n"
-            'Judge whether the Document meets the requirements based on the Query and '
+            "Judge whether the Document meets the requirements based on the Query and "
             'the Instruct provided. Note that the answer can only be "yes" or "no".'
             "<|im_end|>\n<|im_start|>user\n"
         )
@@ -108,7 +113,9 @@ class Reranker:
 
         logger.info(
             "Reranker: model loaded (yes_id=%d, no_id=%d, device=%s)",
-            self._token_true_id, self._token_false_id, device,
+            self._token_true_id,
+            self._token_false_id,
+            device,
         )
 
     def unload(self) -> None:
@@ -183,7 +190,11 @@ class Reranker:
                         batch_pairs = pairs[i : i + batch_size]
 
                         # Step 1: Tokenize body text only (no padding yet).
-                        body_max = self._max_length - len(self._prefix_tokens) - len(self._suffix_tokens)
+                        body_max = (
+                            self._max_length
+                            - len(self._prefix_tokens)
+                            - len(self._suffix_tokens)
+                        )
                         inputs = self._tokenizer(
                             batch_pairs,
                             padding=False,
@@ -195,7 +206,9 @@ class Reranker:
                         # Step 2: Wrap each body with pre-encoded prefix + suffix tokens.
                         for j in range(len(inputs["input_ids"])):
                             inputs["input_ids"][j] = (
-                                self._prefix_tokens + inputs["input_ids"][j] + self._suffix_tokens
+                                self._prefix_tokens
+                                + inputs["input_ids"][j]
+                                + self._suffix_tokens
                             )
 
                         # Step 3: Pad batch to longest sequence in this batch only.
@@ -204,7 +217,9 @@ class Reranker:
                             padding=True,
                             return_tensors="pt",
                         )
-                        padded = {k: v.to(self._model.device) for k, v in padded.items()}
+                        padded = {
+                            k: v.to(self._model.device) for k, v in padded.items()
+                        }
 
                         # Step 4: Forward pass. lm_head patch ensures output is
                         # (batch, 1, vocab) not (batch, seq_len, vocab). logits[:, -1, :]

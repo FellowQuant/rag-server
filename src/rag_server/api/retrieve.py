@@ -8,6 +8,7 @@ Use this endpoint when you need raw retrieved chunks for custom synthesis,
 MCP tool calls, or debugging the retrieval pipeline. For LLM-synthesized
 answers, use POST /ask.
 """
+
 from __future__ import annotations
 
 import logging
