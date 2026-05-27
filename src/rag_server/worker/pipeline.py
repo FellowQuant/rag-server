@@ -22,6 +22,7 @@ Design notes:
     run_pipeline() as an argument. Constructing it per-document is extremely
     expensive (~10-20s) due to ML model loading.
 """
+
 from __future__ import annotations
 
 import gc
@@ -29,7 +30,6 @@ import logging
 import multiprocessing
 import os
 import uuid
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from sqlalchemy import create_engine, delete
@@ -93,6 +93,7 @@ def _dispatch_parser(
 
         if converter is None:
             from rag_server.ingestion.parsers.pdf_parser import make_converter
+
             converter = make_converter(use_gpu=True)
 
         _log_mem("before-convert")
@@ -103,6 +104,7 @@ def _dispatch_parser(
         gc.collect()
         try:
             import torch
+
             torch.cuda.empty_cache()
         except Exception:
             pass
@@ -112,11 +114,18 @@ def _dispatch_parser(
 
     elif file_format == "tex":
         from rag_server.ingestion.parsers.latex_parser import parse_latex
+
         return parse_latex(file_path), False
 
     elif file_format == "ipynb":
         from rag_server.ingestion.parsers.jupyter_parser import parse_jupyter
+
         return parse_jupyter(file_path), False
+
+    elif file_format == "epub":
+        from rag_server.ingestion.parsers.epub_parser import parse_epub
+
+        return parse_epub(file_path)
 
     else:
         raise ValueError(f"Unsupported file_format: {file_format!r}")
@@ -231,7 +240,9 @@ def _set_document_status(
     with Session(engine) as session:
         doc = session.get(Document, document_id)
         if doc is None:
-            logger.error("Document %s not found in SQLite during status update", document_id)
+            logger.error(
+                "Document %s not found in SQLite during status update", document_id
+            )
             return
         doc.status = status
         doc.error_msg = error_msg
@@ -263,7 +274,9 @@ def run_pipeline(
     document_id = job.document_id
     engine = _get_sync_engine(job.sqlite_url)
 
-    logger.info("Pipeline: starting job for document %s (%s)", document_id, job.file_format)
+    logger.info(
+        "Pipeline: starting job for document %s (%s)", document_id, job.file_format
+    )
     _log_mem("pipeline-start")
 
     # Step 1: Mark as indexing.
@@ -299,7 +312,11 @@ def run_pipeline(
                 )
                 session.add(row)
             session.commit()
-        logger.info("Pipeline: %d chunks written to SQLite for %s", len(parsed_chunks), document_id)
+        logger.info(
+            "Pipeline: %d chunks written to SQLite for %s",
+            len(parsed_chunks),
+            document_id,
+        )
         _log_mem("after-sqlite-write")
 
         # Step 5: Embed chunks and upsert to Qdrant.
@@ -316,7 +333,9 @@ def run_pipeline(
         _log_mem("after-qdrant-upsert")
 
         # Step 6: Update page_count on Document (count unique page numbers).
-        unique_pages = {c.page_number for c in parsed_chunks if c.page_number is not None}
+        unique_pages = {
+            c.page_number for c in parsed_chunks if c.page_number is not None
+        }
         with Session(engine) as session:
             doc = session.get(Document, document_id)
             if doc and unique_pages:
@@ -332,14 +351,20 @@ def run_pipeline(
                 "Partial index: some pages failed to parse (Docling PARTIAL_SUCCESS). "
                 "Successfully parsed pages are available for search."
             )
-            _set_document_status(document_id, "indexed_partial", engine, error_msg=error_msg)
+            _set_document_status(
+                document_id, "indexed_partial", engine, error_msg=error_msg
+            )
             logger.warning(
-                "Pipeline: document %s indexed_partial (%d chunks)", document_id, len(parsed_chunks)
+                "Pipeline: document %s indexed_partial (%d chunks)",
+                document_id,
+                len(parsed_chunks),
             )
         else:
             _set_document_status(document_id, "indexed", engine)
             logger.info(
-                "Pipeline: document %s indexed successfully (%d chunks)", document_id, len(parsed_chunks)
+                "Pipeline: document %s indexed successfully (%d chunks)",
+                document_id,
+                len(parsed_chunks),
             )
 
         # Signal FastAPI to rebuild BM25 index with newly indexed chunks.
@@ -365,11 +390,15 @@ def run_pipeline(
         try:
             _delete_sqlite_chunks(document_id, engine)
         except Exception:
-            logger.exception("Pipeline: rollback SQLite chunks failed for %s", document_id)
+            logger.exception(
+                "Pipeline: rollback SQLite chunks failed for %s", document_id
+            )
 
         try:
             _delete_qdrant_document(document_id, job.qdrant_url, job.qdrant_collection)
         except Exception:
-            logger.exception("Pipeline: rollback Qdrant delete failed for %s", document_id)
+            logger.exception(
+                "Pipeline: rollback Qdrant delete failed for %s", document_id
+            )
 
         _set_document_status(document_id, "failed", engine, error_msg=str(exc))

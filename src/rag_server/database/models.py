@@ -1,7 +1,13 @@
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import (
-    DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -26,15 +32,23 @@ class Document(Base):
     title: Mapped[str | None] = mapped_column(String, nullable=True)
     author: Mapped[str | None] = mapped_column(String, nullable=True)
     page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    file_format: Mapped[str] = mapped_column(String, nullable=False)  # pdf | tex | ipynb
-    file_hash: Mapped[str] = mapped_column(String, nullable=False, unique=True)  # SHA-256
-    file_size: Mapped[int] = mapped_column(Integer, nullable=False)   # bytes
+    file_format: Mapped[str] = mapped_column(
+        String, nullable=False
+    )  # pdf | tex | ipynb | epub
+    file_hash: Mapped[str] = mapped_column(
+        String, nullable=False, unique=True
+    )  # SHA-256
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False)  # bytes
     status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
     # status values: pending | indexing | indexed | indexed_partial | failed
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_now, onupdate=_now
+    )
     error_msg: Mapped[str | None] = mapped_column(Text, nullable=True)
-    indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    indexed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     chunks: Mapped[list["Chunk"]] = relationship(
         "Chunk", back_populates="document", cascade="all, delete-orphan"
@@ -67,5 +81,7 @@ class Chunk(Base):
     __table_args__ = (
         Index("idx_chunks_document_id", "document_id"),
         Index("idx_chunks_chunk_type", "chunk_type"),
-        UniqueConstraint("document_id", "chunk_index", name="idx_chunks_document_position"),
+        UniqueConstraint(
+            "document_id", "chunk_index", name="idx_chunks_document_position"
+        ),
     )

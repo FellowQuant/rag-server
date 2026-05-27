@@ -8,11 +8,10 @@ INGEST-01: PDF ingestion with layout-aware parsing preserving tables, formulas,
 INGEST-04: Code block chunks preserve syntax and language metadata.
 INGEST-05: Formula chunks enriched with surrounding paragraph context.
 """
+
 from __future__ import annotations
 
 import logging
-import re
-import unicodedata
 from pathlib import Path
 
 from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
@@ -20,33 +19,11 @@ from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.datamodel.settings import settings as docling_settings
 from docling.document_converter import DocumentConverter, PdfFormatOption
-from docling_core.types.doc import (
-    CodeItem,
-    ContentLayer,
-    FormulaItem,
-    SectionHeaderItem,
-    TableItem,
-    TextItem,
-)
 
-from rag_server.ingestion.chunker import (
-    ParsedChunk,
-    enrich_formula_content,
-    split_text_tokens,
-)
+from rag_server.ingestion.chunker import ParsedChunk
+from rag_server.ingestion.parsers.docling_chunks import chunks_from_docling_document
 
 logger = logging.getLogger(__name__)
-
-# Matches PDF /uniXXXX glyph name artifacts that Docling emits when ToUnicode
-# CMap entries use the /uniXXXX naming convention instead of standard glyph names.
-# Example: "/uniFB01" → "ﬁ" (U+FB01, fi ligature), then NFKC maps it to "fi".
-_UNI_GLYPH_RE = re.compile(r'/uni([0-9A-Fa-f]{4})')
-
-
-def _normalize_text(text: str) -> str:
-    """Normalize PDF-extracted text: resolve /uniXXXX escapes and decompose ligatures."""
-    text = _UNI_GLYPH_RE.sub(lambda m: chr(int(m.group(1), 16)), text)
-    return unicodedata.normalize("NFKC", text)
 
 
 def _patch_pdf_hyperlink() -> None:
@@ -171,11 +148,11 @@ def _teardown_conversion_result(result) -> None:
     """
     try:
         # 1. Clear all page-level data (image caches, parsed pages, backends).
-        for page in getattr(result, 'pages', []):
+        for page in getattr(result, "pages", []):
             page._image_cache = {}
             page.predictions = None
             page.assembled = None
-            if hasattr(page, 'parsed_page'):
+            if hasattr(page, "parsed_page"):
                 page.parsed_page = None
             if page._backend is not None:
                 try:
@@ -186,9 +163,9 @@ def _teardown_conversion_result(result) -> None:
         result.pages.clear()
 
         # 2. Unload the document-level backend (pypdfium2/docling-parse handles).
-        input_doc = getattr(result, 'input', None)
+        input_doc = getattr(result, "input", None)
         if input_doc is not None:
-            backend = getattr(input_doc, '_backend', None)
+            backend = getattr(input_doc, "_backend", None)
             if backend is not None:
                 try:
                     backend.unload()
@@ -202,9 +179,9 @@ def _teardown_conversion_result(result) -> None:
         result.assembled = None
 
         # 4. Clear error list and timings (minor, but breaks reference cycles).
-        if hasattr(result, 'errors'):
+        if hasattr(result, "errors"):
             result.errors.clear()
-        if hasattr(result, 'timings'):
+        if hasattr(result, "timings"):
             result.timings.clear()
 
     except Exception as exc:
@@ -212,7 +189,8 @@ def _teardown_conversion_result(result) -> None:
 
 
 def parse_pdf(
-    file_path: str | Path, converter: DocumentConverter,
+    file_path: str | Path,
+    converter: DocumentConverter,
 ) -> tuple[list[ParsedChunk], bool]:
     """Convert a PDF file to a list of typed ParsedChunk objects.
 
@@ -232,6 +210,7 @@ def parse_pdf(
     result = converter.convert(str(file_path), raises_on_error=False)
 
     from docling.datamodel.base_models import ConversionStatus
+
     if result.status == ConversionStatus.FAILURE:
         logger.error("Docling: total failure on %s — %s", file_path, result.errors)
         _teardown_conversion_result(result)
@@ -242,91 +221,18 @@ def parse_pdf(
     if is_partial:
         logger.warning("Docling: partial success on %s — %s", file_path, result.errors)
 
-    doc = result.document
-    raw_chunks: list[ParsedChunk] = []
-    current_heading: str | None = None
-    last_paragraph: str = ""
+    raw_chunks = chunks_from_docling_document(
+        result.document,
+        include_title_as_heading=False,
+        preserve_page_numbers=True,
+    )
 
-    for item, _level in doc.iterate_items(
-        included_content_layers={ContentLayer.BODY}
-    ):
-        page_no = item.prov[0].page_no if item.prov else None
-
-        if isinstance(item, SectionHeaderItem):
-            current_heading = _normalize_text(item.text) if item.text else current_heading
-            # Section headers are navigation context, not standalone chunks.
-            # Update last_paragraph so formulas after a heading have some context.
-            last_paragraph = current_heading or last_paragraph
-
-        elif isinstance(item, FormulaItem):
-            formula_latex = item.text or ""
-            if not formula_latex:
-                logger.debug("Empty FormulaItem on page %s — enrichment may have failed", page_no)
-            embed_content = enrich_formula_content(formula_latex, last_paragraph)
-            raw_chunks.append(
-                ParsedChunk(
-                    chunk_type="formula",
-                    content=embed_content,
-                    display_content=formula_latex,
-                    page_number=page_no,
-                    section_heading=current_heading,
-                )
-            )
-            # Reset paragraph tracker after formula so next formula gets fresh context.
-            last_paragraph = ""
-
-        elif isinstance(item, TableItem):
-            # export_to_markdown() handles merged cells, multi-row headers, spans.
-            # Do NOT use export_to_dataframe() without doc= argument (deprecated).
-            table_md = item.export_to_markdown()
-            raw_chunks.append(
-                ParsedChunk(
-                    chunk_type="table",
-                    content=table_md,
-                    display_content=table_md,
-                    page_number=page_no,
-                    section_heading=current_heading,
-                )
-            )
-
-        elif isinstance(item, CodeItem):
-            # code_language is set by do_code_enrichment=True pipeline option.
-            lang = getattr(item, "code_language", None)
-            code_text = item.text or ""
-            raw_chunks.append(
-                ParsedChunk(
-                    chunk_type="code",
-                    content=code_text,
-                    display_content=code_text,
-                    page_number=page_no,
-                    section_heading=current_heading,
-                    language=str(lang) if lang else None,
-                )
-            )
-
-        elif isinstance(item, TextItem):
-            text = _normalize_text(item.text) if item.text else ""
-            last_paragraph = text  # track for formula context enrichment
-            if not text.strip():
-                continue
-            # Split long text blocks; atomic chunks (formula/table/code) are never split.
-            segments = split_text_tokens(text)
-            for seg in segments:
-                raw_chunks.append(
-                    ParsedChunk(
-                        chunk_type="text",
-                        content=seg,
-                        display_content=None,
-                        page_number=page_no,
-                        section_heading=current_heading,
-                    )
-                )
-
-    # Assign sequential chunk_index after all chunks are collected.
-    for idx, chunk in enumerate(raw_chunks):
-        chunk.chunk_index = idx
-
-    logger.info("parse_pdf: %d chunks from %s (status=%s)", len(raw_chunks), file_path, result.status)
+    logger.info(
+        "parse_pdf: %d chunks from %s (status=%s)",
+        len(raw_chunks),
+        file_path,
+        result.status,
+    )
 
     # Explicitly tear down the ConversionResult now that all data has been
     # extracted into ParsedChunk objects. This breaks the reference chain:

@@ -12,6 +12,7 @@ Session commit notes:
   point unambiguous regardless of session context changes in the future,
   and ensure the Document row is visible to the worker before enqueue().
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -43,6 +44,7 @@ ALLOWED_EXTENSIONS: dict[str, str] = {
     ".pdf": "pdf",
     ".tex": "tex",
     ".ipynb": "ipynb",
+    ".epub": "epub",
 }
 
 
@@ -67,7 +69,7 @@ async def upload_document(
     immediately with 202.
 
     Returns 409 if the file hash already exists.
-    Returns 415 if the file extension is not .pdf, .tex, or .ipynb.
+    Returns 415 if the file extension is not .pdf, .tex, .ipynb, or .epub.
 
     Note on commit: get_db() auto-commits on exit, but we call db.commit()
     explicitly here before enqueue() to guarantee the Document row is
@@ -79,7 +81,7 @@ async def upload_document(
     if suffix not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=415,
-            detail=f"Unsupported file type '{suffix}'. Allowed: .pdf, .tex, .ipynb",
+            detail=f"Unsupported file type '{suffix}'. Allowed: .pdf, .tex, .ipynb, .epub",
         )
 
     contents = await file.read()
@@ -88,9 +90,7 @@ async def upload_document(
     file_format = ALLOWED_EXTENSIONS[suffix]
 
     # Check for duplicate file hash.
-    existing = await db.execute(
-        select(Document).where(Document.file_hash == file_hash)
-    )
+    existing = await db.execute(select(Document).where(Document.file_hash == file_hash))
     existing_doc = existing.scalar_one_or_none()
     if existing_doc is not None:
         raise HTTPException(
@@ -116,8 +116,8 @@ async def upload_document(
         status="pending",
     )
     db.add(doc)
-    await db.flush()    # assigns created_at/updated_at via server defaults
-    await db.commit()   # make row durable before enqueue() — worker must see it
+    await db.flush()  # assigns created_at/updated_at via server defaults
+    await db.commit()  # make row durable before enqueue() — worker must see it
 
     # Enqueue ingestion job.
     settings = get_settings()
@@ -244,9 +244,9 @@ async def delete_document(
 
     # Delete from SQLite (CASCADE removes Chunk rows automatically).
     await db.delete(doc)
-    await db.commit()   # commit SQLite delete before Qdrant call
-                        # If Qdrant delete fails, vectors are orphaned but
-                        # SQLite (authoritative) no longer has the document.
+    await db.commit()  # commit SQLite delete before Qdrant call
+    # If Qdrant delete fails, vectors are orphaned but
+    # SQLite (authoritative) no longer has the document.
 
     # Delete Qdrant vectors.
     qdrant_store = request.app.state.qdrant_store

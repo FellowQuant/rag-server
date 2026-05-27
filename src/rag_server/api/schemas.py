@@ -14,7 +14,7 @@ class DocumentUploadResponse(BaseModel):
     status: str  # "pending"
     filename: str
     file_size: int  # bytes
-    file_format: str  # "pdf" | "tex" | "ipynb"
+    file_format: str  # "pdf" | "tex" | "ipynb" | "epub"
     created_at: datetime
 
 

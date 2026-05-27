@@ -3,7 +3,7 @@ set -euo pipefail
 
 SERVER_URL="${SERVER_URL:-http://localhost:8001}"
 BIBLIOTECA_DIR="${BIBLIOTECA_DIR:-/home/jcanossa/workspace/fellow-quant/biblioteca}"
-SUPPORTED_EXTENSIONS=("pdf" "ipynb" "tex")
+SUPPORTED_EXTENSIONS=("pdf" "ipynb" "tex" "epub")
 
 tmp_docs_json="$(mktemp)"
 tmp_upload_resp="$(mktemp)"
@@ -49,7 +49,7 @@ upload_biblioteca_docs() {
 
   mapfile -d '' -t files < <(
     find "${BIBLIOTECA_DIR}" -type f \
-      \( -iname '*.pdf' -o -iname '*.ipynb' -o -iname '*.tex' \) \
+      \( -iname '*.pdf' -o -iname '*.ipynb' -o -iname '*.tex' -o -iname '*.epub' \) \
       -print0 | sort -z
   )
 

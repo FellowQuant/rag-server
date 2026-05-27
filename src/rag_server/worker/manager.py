@@ -11,6 +11,7 @@ called at the top of main.py BEFORE any torch/cuda imports (including
 docling and FlagEmbedding). The "spawn" method creates a fresh Python
 interpreter for the worker, avoiding CUDA fork undefined behavior on Linux.
 """
+
 from __future__ import annotations
 
 import logging
@@ -27,12 +28,13 @@ class IngestionJob:
     All fields are serializable (strings, ints) -- no SQLAlchemy objects or
     file handles.
     """
-    document_id: str        # UUID string matching documents.id in SQLite
-    file_path: str          # Absolute path to uploaded file on disk
-    file_format: str        # "pdf" | "tex" | "ipynb"
+
+    document_id: str  # UUID string matching documents.id in SQLite
+    file_path: str  # Absolute path to uploaded file on disk
+    file_format: str  # "pdf" | "tex" | "ipynb" | "epub"
     original_filename: str  # For logging/error messages
-    sqlite_url: str         # Full sqlite+aiosqlite:// URL from Settings
-    qdrant_url: str         # Full http://host:port URL from Settings
+    sqlite_url: str  # Full sqlite+aiosqlite:// URL from Settings
+    qdrant_url: str  # Full http://host:port URL from Settings
     qdrant_collection: str  # Collection name from Settings
 
 
@@ -57,14 +59,20 @@ class WorkerManager:
         message "Embedder: model loaded" appears.
         """
         self._queue = multiprocessing.Queue(maxsize=200)
-        self._result_queue = multiprocessing.Queue(maxsize=200)   # worker->FastAPI signals
+        self._result_queue = multiprocessing.Queue(
+            maxsize=200
+        )  # worker->FastAPI signals
         self._stop_event = multiprocessing.Event()
 
         from rag_server.worker.process import worker_main
 
         self._process = multiprocessing.Process(
             target=worker_main,
-            args=(self._queue, self._result_queue, self._stop_event),  # result_queue added
+            args=(
+                self._queue,
+                self._result_queue,
+                self._stop_event,
+            ),  # result_queue added
             daemon=True,
             name="rag-ingestion-worker",
         )
@@ -98,7 +106,9 @@ class WorkerManager:
             self._stop_event.set()
         if self._queue:
             try:
-                self._queue.put_nowait(None)  # poison pill in case blocked on queue.get()
+                self._queue.put_nowait(
+                    None
+                )  # poison pill in case blocked on queue.get()
             except Exception:
                 pass
 
@@ -114,7 +124,9 @@ class WorkerManager:
     def result_queue(self) -> multiprocessing.Queue:
         """Queue carrying worker->FastAPI signals (e.g., BM25 rebuild needed)."""
         if self._result_queue is None:
-            raise RuntimeError("WorkerManager.start() must be called before result_queue access")
+            raise RuntimeError(
+                "WorkerManager.start() must be called before result_queue access"
+            )
         return self._result_queue
 
     @property

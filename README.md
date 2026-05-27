@@ -1,6 +1,6 @@
 # FellowQuant RAG Server
 
-A local RAG (Retrieval-Augmented Generation) server built for quantitative finance research documents. Ingests PDFs, LaTeX source files, and Jupyter notebooks with structure preservation — financial tables stay as tables, mathematical formulas stay as LaTeX, code blocks stay intact. Exposes a REST API and MCP server.
+A local RAG (Retrieval-Augmented Generation) server built for quantitative finance research documents. Ingests PDFs, EPUB books, LaTeX source files, and Jupyter notebooks with structure preservation — financial tables stay as tables, mathematical formulas stay as LaTeX, code blocks stay intact. Exposes a REST API and MCP server.
 
 <p align="center">
   <img src="assets/rag_server_logo.png" alt="RAG Server Logo" width="900">
@@ -40,7 +40,7 @@ If the `claude` CLI is not installed, setup writes `.mcp.json` and prints instru
 
 ## What it does
 
-- **Ingests** PDFs (via Docling), `.tex` files, and `.ipynb` notebooks with layout-aware chunking
+- **Ingests** PDFs (via Docling), EPUB books, `.tex` files, and `.ipynb` notebooks with layout-aware chunking
 - **Retrieves** using three-mode hybrid search: BM25 keyword + BGE-M3 dense + BGE-M3 sparse, fused via RRF and reranked by Qwen3-Reranker-0.6B
 - **Answers** questions with a local LLM (vLLM, llama.cpp, or AWS Bedrock) and inline citations
 - **Integrates** with Claude Code/Codex via HTTP MCP — 5 tools: `retrieve`, `ask`, `list_documents`, `get_document`, `delete_document`
@@ -92,7 +92,7 @@ All endpoints are under `/api/v1`. A health check is at `/health`.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/v1/documents` | Upload a PDF, `.tex`, or `.ipynb` file |
+| `POST` | `/api/v1/documents` | Upload a PDF, EPUB, `.tex`, or `.ipynb` file |
 | `GET` | `/api/v1/documents` | List all documents with indexing status |
 | `GET` | `/api/v1/documents/{id}` | Get metadata for a specific document |
 | `DELETE` | `/api/v1/documents/{id}` | Delete document and all associated chunks/vectors |
@@ -179,6 +179,7 @@ rag-server setup
 | Component | Library | Notes |
 |-----------|---------|-------|
 | PDF parser | Docling (IBM) | 97.9% table accuracy; Granite-Docling VLM for formula→LaTeX |
+| EPUB parser | EPUB spine + Docling HTML | Section-based text/table/code extraction; no page numbers |
 | LaTeX parser | pylatexenc 2.10 | Direct `.tex` ingestion |
 | Notebook parser | nbformat | Code and output cells preserved |
 | Embeddings | BGE-M3 (FlagEmbedding) | Dense + sparse vectors from single inference pass |

@@ -11,7 +11,7 @@ STATE_FILE="$LOG_DIR/biblioteca_batch_ingest.state"
 DB_FILE="$PROJECT_DIR/data/rag.db"
 mkdir -p "$LOG_DIR"
 
-mapfile -d '' FILES < <(find "$BASE_DIR" -type f \( -iname '*.pdf' -o -iname '*.ipynb' -o -iname '*.tex' \) -print0 | sort -z)
+mapfile -d '' FILES < <(find "$BASE_DIR" -type f \( -iname '*.pdf' -o -iname '*.ipynb' -o -iname '*.tex' -o -iname '*.epub' \) -print0 | sort -z)
 TOTAL=${#FILES[@]}
 if [ "$TOTAL" -eq 0 ]; then
   echo "No supported files found under $BASE_DIR" | tee -a "$RUN_LOG"

@@ -19,14 +19,11 @@ Model loading strategy:
     VRAM. Both are loaded ONCE at startup and reused for every job.
     Per-document construction would make PDF indexing prohibitively slow.
 """
+
 from __future__ import annotations
 
 import logging
 import multiprocessing
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from rag_server.worker.manager import IngestionJob
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +52,9 @@ def worker_main(
         level=logging.INFO,
         format="%(asctime)s [worker] %(levelname)s %(name)s: %(message)s",
     )
-    logger.info("Worker process started (PID %d)", multiprocessing.current_process().pid)
+    logger.info(
+        "Worker process started (PID %d)", multiprocessing.current_process().pid
+    )
 
     from rag_server.ingestion.embedder import Embedder
 
@@ -71,11 +70,14 @@ def worker_main(
     converter = None
     try:
         from rag_server.ingestion.parsers.pdf_parser import make_converter
+
         converter = make_converter(use_gpu=True)
         logger.info("Worker: DocumentConverter loaded")
     except Exception:
-        logger.exception("Worker: failed to load DocumentConverter -- PDF jobs will fail")
-        # Non-fatal: .tex and .ipynb jobs can still proceed; PDF jobs will
+        logger.exception(
+            "Worker: failed to load DocumentConverter -- PDF jobs will fail"
+        )
+        # Non-fatal: .tex, .ipynb, and .epub jobs can still proceed; PDF jobs will
         # fall back to on-demand construction (slow) inside _dispatch_parser.
 
     logger.info("Worker: ready to process jobs")
@@ -95,9 +97,13 @@ def worker_main(
 
         try:
             from rag_server.worker.pipeline import run_pipeline
+
             run_pipeline(job, converter, embedder, result_queue)
         except Exception:
-            logger.exception("Worker: uncaught error processing job %s", getattr(job, "document_id", "unknown"))
+            logger.exception(
+                "Worker: uncaught error processing job %s",
+                getattr(job, "document_id", "unknown"),
+            )
 
     logger.info("Worker: shutting down, releasing models")
     embedder.unload()
