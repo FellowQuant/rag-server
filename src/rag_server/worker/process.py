@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import multiprocessing
+from dataclasses import replace
 
 logger = logging.getLogger(__name__)
 
@@ -100,8 +101,29 @@ def worker_main(
 
         try:
             from rag_server.worker.pipeline import run_pipeline
+            from rag_server.worker.resource_guard import ResourceLimitExceeded
 
             run_pipeline(job, converter, embedder, result_queue)
+        except ResourceLimitExceeded:
+            attempts = getattr(job, "resource_attempts", 0)
+            retry_limit = settings.indexer_resource_retry_limit
+            if attempts < retry_limit:
+                retry_job = replace(job, resource_attempts=attempts + 1)
+                job_queue.put(retry_job, block=True)
+                logger.warning(
+                    "Worker: resource limit processing %s; requeued retry %d/%d "
+                    "and exiting to release memory",
+                    getattr(job, "document_id", "unknown"),
+                    attempts + 1,
+                    retry_limit,
+                )
+            else:
+                logger.error(
+                    "Worker: resource retry limit exhausted for %s; exiting to "
+                    "release memory",
+                    getattr(job, "document_id", "unknown"),
+                )
+            break
         except Exception:
             logger.exception(
                 "Worker: uncaught error processing job %s",

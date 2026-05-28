@@ -58,3 +58,34 @@ def test_iter_pdf_batches_splits_large_pdf_and_offsets_page_numbers(
         "batch with 2 pages",
         "batch with 1 pages",
     ]
+
+
+def test_iter_pdf_batches_splits_by_page_count_even_below_size_threshold(
+    tmp_path: Path, monkeypatch
+) -> None:
+    pdf_path = tmp_path / "many-pages-small-file.pdf"
+    _write_blank_pdf(pdf_path, page_count=5)
+    parsed_page_counts: list[int] = []
+
+    def fake_parse_pdf(file_path: str | Path, converter):
+        doc = pdfium.PdfDocument(str(file_path))
+        try:
+            parsed_page_counts.append(len(doc))
+            return [
+                ParsedChunk(chunk_type="text", content="batch", page_number=1)
+            ], False
+        finally:
+            doc.close()
+
+    monkeypatch.setattr(pdf_parser, "parse_pdf", fake_parse_pdf)
+
+    list(
+        pdf_parser.iter_pdf_batches(
+            pdf_path,
+            converter=object(),
+            pages_per_batch=2,
+            large_file_bytes=1024 * 1024 * 1024,
+        )
+    )
+
+    assert parsed_page_counts == [2, 2, 1]

@@ -22,6 +22,7 @@ class FakeJob:
     sqlite_url: str
     qdrant_url: str
     qdrant_collection: str
+    resource_attempts: int = 0
 
 
 class FakeGuard:
@@ -119,7 +120,7 @@ def test_run_pipeline_processes_parse_batches_with_contiguous_chunk_indexes(
     assert "after-qdrant-upsert" in guard.labels
 
 
-def test_run_pipeline_rolls_back_when_resource_guard_trips(
+def test_run_pipeline_rolls_back_and_resets_pending_when_resource_guard_trips(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -179,12 +180,17 @@ def test_run_pipeline_rolls_back_when_resource_guard_trips(
         qdrant_collection="documents",
     )
 
-    pipeline.run_pipeline(
-        job,
-        converter=None,
-        embedder=object(),
-        resource_guard=FailingGuard(),
-    )
+    try:
+        pipeline.run_pipeline(
+            job,
+            converter=None,
+            embedder=object(),
+            resource_guard=FailingGuard(),
+        )
+    except ResourceLimitExceeded:
+        pass
+    else:
+        raise AssertionError("ResourceLimitExceeded should propagate to recycle worker")
 
     with Session(engine) as session:
         doc = session.get(Document, "doc-guard")
@@ -195,6 +201,83 @@ def test_run_pipeline_rolls_back_when_resource_guard_trips(
         )
 
     assert chunks == []
-    assert doc.status == "failed"
+    assert doc.status == "pending"
     assert "unsafe at after-qdrant-upsert" in doc.error_msg
     assert deleted_document_ids == ["doc-guard"]
+
+
+def test_run_pipeline_marks_failed_when_resource_retry_limit_is_exhausted(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "rag.db"
+    engine = create_engine(f"sqlite:///{db_path}")
+    Base.metadata.create_all(engine)
+    with Session(engine) as session:
+        session.add(
+            Document(
+                id="doc-guard-exhausted",
+                filename="large.pdf",
+                file_format="pdf",
+                file_hash="hash",
+                file_size=1,
+                status="pending",
+            )
+        )
+        session.commit()
+
+    def fake_dispatch_batches(file_format, file_path, converter=None):
+        return iter(
+            [
+                ParsedChunkBatch(
+                    chunks=[ParsedChunk(chunk_type="text", content="first")],
+                    page_count=1,
+                )
+            ]
+        )
+
+    class FailingGuard(FakeGuard):
+        def checkpoint(self, label: str) -> None:
+            super().checkpoint(label)
+            if label == "after-parse":
+                raise ResourceLimitExceeded("unsafe at after-parse")
+
+    monkeypatch.setattr(pipeline, "_dispatch_parser_batches", fake_dispatch_batches)
+    monkeypatch.setattr(pipeline, "_delete_qdrant_document", lambda *args: None)
+
+    job = FakeJob(
+        document_id="doc-guard-exhausted",
+        file_path="/tmp/large.pdf",
+        file_format="pdf",
+        original_filename="large.pdf",
+        sqlite_url=f"sqlite+aiosqlite:///{db_path}",
+        qdrant_url="http://localhost:6330",
+        qdrant_collection="documents",
+        resource_attempts=2,
+    )
+
+    try:
+        pipeline.run_pipeline(
+            job,
+            converter=None,
+            embedder=object(),
+            resource_guard=FailingGuard(),
+        )
+    except ResourceLimitExceeded:
+        pass
+    else:
+        raise AssertionError("ResourceLimitExceeded should propagate to recycle worker")
+
+    with Session(engine) as session:
+        doc = session.get(Document, "doc-guard-exhausted")
+        chunks = (
+            session.execute(
+                select(Chunk).where(Chunk.document_id == "doc-guard-exhausted")
+            )
+            .scalars()
+            .all()
+        )
+
+    assert chunks == []
+    assert doc.status == "failed"
+    assert "unsafe at after-parse" in doc.error_msg

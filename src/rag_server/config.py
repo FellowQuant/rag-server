@@ -77,6 +77,11 @@ class Settings(BaseSettings):
         alias="INDEXER_EMBED_BATCH_SIZE",
         validation_alias="INDEXER_EMBED_BATCH_SIZE",
     )
+    indexer_resource_retry_limit: int = Field(
+        default=2,
+        alias="INDEXER_RESOURCE_RETRY_LIMIT",
+        validation_alias="INDEXER_RESOURCE_RETRY_LIMIT",
+    )
 
     @field_validator("data_dir", mode="before")
     @classmethod

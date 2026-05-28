@@ -289,7 +289,7 @@ def iter_pdf_batches(
     file_size = path.stat().st_size
     page_count = _pdf_page_count(path)
 
-    if file_size <= large_file_bytes or page_count <= pages_per_batch:
+    if page_count <= pages_per_batch:
         chunks, is_partial = parse_pdf(path, converter)
         yield ParsedChunkBatch(
             chunks=chunks,
@@ -299,10 +299,12 @@ def iter_pdf_batches(
         return
 
     logger.info(
-        "iter_pdf_batches: splitting %s (%d bytes, %d pages) into %d-page batches",
+        "iter_pdf_batches: splitting %s (%d bytes, %d pages, threshold=%d bytes) "
+        "into %d-page batches",
         file_path,
         file_size,
         page_count,
+        large_file_bytes,
         pages_per_batch,
     )
     with tempfile.TemporaryDirectory(prefix="rag_pdf_batches_") as tmp:

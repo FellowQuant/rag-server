@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import multiprocessing
+import threading
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ class IngestionJob:
     sqlite_url: str  # Full sqlite+aiosqlite:// URL from Settings
     qdrant_url: str  # Full http://host:port URL from Settings
     qdrant_collection: str  # Collection name from Settings
+    resource_attempts: int = 0  # Incremented when resource exhaustion forces retry
 
 
 class WorkerManager:
@@ -50,6 +52,8 @@ class WorkerManager:
         self._result_queue: multiprocessing.Queue | None = None
         self._stop_event: multiprocessing.Event | None = None
         self._process: multiprocessing.Process | None = None
+        self._monitor_stop: threading.Event | None = None
+        self._monitor_thread: threading.Thread | None = None
 
     def start(self) -> None:
         """Start the worker process. Call once from FastAPI lifespan startup.
@@ -63,7 +67,23 @@ class WorkerManager:
             maxsize=200
         )  # worker->FastAPI signals
         self._stop_event = multiprocessing.Event()
+        self._monitor_stop = threading.Event()
 
+        self._start_process()
+        self._monitor_thread = threading.Thread(
+            target=self._monitor_worker,
+            daemon=True,
+            name="rag-ingestion-worker-monitor",
+        )
+        self._monitor_thread.start()
+
+    def _start_process(self) -> None:
+        if (
+            self._queue is None
+            or self._result_queue is None
+            or self._stop_event is None
+        ):
+            raise RuntimeError("WorkerManager queues must be initialized first")
         from rag_server.worker.process import worker_main
 
         self._process = multiprocessing.Process(
@@ -78,6 +98,23 @@ class WorkerManager:
         )
         self._process.start()
         logger.info("WorkerManager: worker process started (PID %d)", self._process.pid)
+
+    def _monitor_worker(self) -> None:
+        """Restart the worker if it exits unexpectedly."""
+        if self._monitor_stop is None:
+            return
+
+        while not self._monitor_stop.wait(timeout=2.0):
+            process = self._process
+            if process is None or process.is_alive():
+                continue
+            if self._stop_event is not None and self._stop_event.is_set():
+                continue
+            logger.warning(
+                "WorkerManager: worker exited unexpectedly (exitcode=%s); restarting",
+                process.exitcode,
+            )
+            self._start_process()
 
     def enqueue(self, job: IngestionJob) -> None:
         """Add an ingestion job to the worker queue.
@@ -111,6 +148,8 @@ class WorkerManager:
             return
 
         logger.info("WorkerManager: stopping worker process")
+        if self._monitor_stop:
+            self._monitor_stop.set()
         if self._stop_event:
             self._stop_event.set()
         if self._queue:
@@ -126,6 +165,9 @@ class WorkerManager:
             logger.warning("WorkerManager: worker did not stop in 30s, terminating")
             self._process.terminate()
             self._process.join(timeout=5)
+
+        if self._monitor_thread and self._monitor_thread.is_alive():
+            self._monitor_thread.join(timeout=5)
 
         logger.info("WorkerManager: worker stopped")
 

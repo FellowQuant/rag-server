@@ -63,7 +63,7 @@ class ResourceGuard:
         snapshot = current_memory_snapshot()
         rss_limit = settings.indexer_worker_rss_soft_limit_mb
         if rss_limit <= 0:
-            rss_limit = min(8192, max(4096, snapshot.available_mb * 0.50))
+            rss_limit = min(24576, max(8192, snapshot.available_mb * 0.50))
         return cls(
             rss_soft_limit_mb=rss_limit,
             min_available_ram_mb=settings.indexer_min_available_ram_mb,

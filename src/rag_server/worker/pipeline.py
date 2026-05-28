@@ -39,7 +39,7 @@ from rag_server.config import get_settings
 from rag_server.database.models import Chunk, Document
 from rag_server.ingestion.chunker import ParsedChunk, ParsedChunkBatch
 from rag_server.ingestion.embedder import Embedder
-from rag_server.worker.resource_guard import ResourceGuard
+from rag_server.worker.resource_guard import ResourceGuard, ResourceLimitExceeded
 
 if TYPE_CHECKING:
     from docling.document_converter import DocumentConverter
@@ -316,7 +316,22 @@ def _set_document_status(
         doc.updated_at = datetime.now(timezone.utc)
         if status in ("indexed", "indexed_partial"):
             doc.indexed_at = datetime.now(timezone.utc)
+        elif status in ("pending", "failed"):
+            doc.indexed_at = None
         session.commit()
+
+
+def _rollback_partial_index(document_id: str, job, engine) -> None:
+    """Remove partial SQLite/Qdrant data written before a pipeline failure."""
+    try:
+        _delete_sqlite_chunks(document_id, engine)
+    except Exception:
+        logger.exception("Pipeline: rollback SQLite chunks failed for %s", document_id)
+
+    try:
+        _delete_qdrant_document(document_id, job.qdrant_url, job.qdrant_collection)
+    except Exception:
+        logger.exception("Pipeline: rollback Qdrant delete failed for %s", document_id)
 
 
 def run_pipeline(
@@ -472,22 +487,30 @@ def run_pipeline(
         gc.collect()
         _log_mem("after-gc")
 
+    except ResourceLimitExceeded as exc:
+        logger.exception("Pipeline: resource exhaustion on document %s", document_id)
+        _rollback_partial_index(document_id, job, engine)
+
+        retry_limit = get_settings().indexer_resource_retry_limit
+        attempts = getattr(job, "resource_attempts", 0)
+        if attempts < retry_limit:
+            next_attempt = attempts + 1
+            _set_document_status(
+                document_id,
+                "pending",
+                engine,
+                error_msg=(
+                    f"{exc}; retry {next_attempt}/{retry_limit} queued after "
+                    "worker restart"
+                ),
+            )
+        else:
+            _set_document_status(document_id, "failed", engine, error_msg=str(exc))
+        raise
+
     except Exception as exc:
         logger.exception("Pipeline: failure on document %s", document_id)
 
         # Rollback: remove any partial data so failure state is clean.
-        try:
-            _delete_sqlite_chunks(document_id, engine)
-        except Exception:
-            logger.exception(
-                "Pipeline: rollback SQLite chunks failed for %s", document_id
-            )
-
-        try:
-            _delete_qdrant_document(document_id, job.qdrant_url, job.qdrant_collection)
-        except Exception:
-            logger.exception(
-                "Pipeline: rollback Qdrant delete failed for %s", document_id
-            )
-
+        _rollback_partial_index(document_id, job, engine)
         _set_document_status(document_id, "failed", engine, error_msg=str(exc))
