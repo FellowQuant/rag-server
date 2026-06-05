@@ -216,6 +216,7 @@ class Reranker:
                             inputs,
                             padding=True,
                             return_tensors="pt",
+                            verbose=False,
                         )
                         padded = {
                             k: v.to(self._model.device) for k, v in padded.items()

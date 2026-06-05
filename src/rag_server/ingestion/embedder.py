@@ -127,6 +127,7 @@ class Embedder:
                     return_dense=True,
                     return_sparse=True,
                     return_colbert_vecs=False,  # not used in Phase 2; saves VRAM
+                    verbose=False,
                 )
                 dense_vecs: np.ndarray = output["dense_vecs"]  # shape (N, 1024)
                 lexical_weights: list[dict[int, float]] = output["lexical_weights"]
@@ -182,6 +183,7 @@ class Embedder:
                 return_dense=True,
                 return_sparse=True,
                 return_colbert_vecs=False,
+                verbose=False,
             )
             dense_vec: list[float] = output["dense_vecs"][0].tolist()
             raw: dict[int, float] = output["lexical_weights"][0]
