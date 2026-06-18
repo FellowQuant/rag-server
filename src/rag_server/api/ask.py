@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 import logging
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request, status
 from sse_starlette import EventSourceResponse
 
 from rag_server.api.schemas import AskRequest, AskResponse
@@ -64,7 +64,17 @@ async def ask(
         If streaming=True: EventSourceResponse with token and done SSE events.
     """
     retrieval_engine: RetrievalEngine = request.app.state.retrieval_engine
-    synthesis_engine: SynthesisEngine = request.app.state.synthesis_engine
+    synthesis_engine: SynthesisEngine | None = request.app.state.synthesis_engine
+    if synthesis_engine is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Ask synthesis is disabled for this RAG server instance. "
+                "Restart with `rag-server start --ask` or set RAG_ASK_ENABLED=true "
+                "to enable LLM-backed answers; use /retrieve or MCP retrieve for "
+                "model-free retrieval."
+            ),
+        )
 
     # Retrieve chunks via Phase 3 RetrievalEngine
     retrieval_result = await retrieval_engine.search(

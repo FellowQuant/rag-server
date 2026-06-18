@@ -28,6 +28,8 @@ After installation, run `rag-server setup` (or any `rag-server` command) to conf
 | `rag-server setup` | Configure MCP server in Claude Code (global or local scope) |
 | `rag-server start-qdrant` | Start Qdrant vector database via Docker |
 | `rag-server start` | Start FastAPI REST server on port 8001 |
+| `rag-server start --no-ask` | Start retrieval/MCP without LLM-backed `/ask` synthesis |
+| `rag-server start --ask` | Explicitly enable LLM-backed `/ask` synthesis |
 | `rag-server mcp` | Start legacy stdio MCP compatibility mode (proxies to the shared server) |
 
 ### MCP Setup
@@ -154,7 +156,7 @@ The `.mcp.json` at the project root points clients at the shared local MCP endpo
 | Tool | Description |
 |------|-------------|
 | `retrieve` | Hybrid search — returns ranked chunks with full citation metadata and scores |
-| `ask` | Full RAG pipeline — LLM-synthesized answer with citations; falls back to raw chunks if LLM unavailable |
+| `ask` | Full RAG pipeline — LLM-synthesized answer with citations; returns 503 when ask synthesis is disabled |
 | `list_documents` | List all documents with metadata and indexing status |
 | `get_document` | Get metadata for a document by ID |
 | `delete_document` | Delete a document and all associated data |
@@ -227,7 +229,26 @@ DATA_DIR=./data   # optional override; default is repo-local rag-server/data
 QDRANT_HOST=localhost      # or container name inside Docker
 QDRANT_PORT=6330
 MAX_UPLOAD_SIZE=104857600  # 100 MB in bytes
+RAG_ASK_ENABLED=true       # set false for retrieval-only mode without an LLM endpoint
 ```
+
+### Retrieval-only mode
+
+Use retrieval-only mode when the workstation GPU needs to run other models and
+you do not want a resident vLLM/llama.cpp process for `/ask` synthesis:
+
+```bash
+rag-server start --no-ask
+# or
+RAG_ASK_ENABLED=false rag-server start
+```
+
+In this mode, `/api/v1/retrieve` and MCP `retrieve` keep working. `/api/v1/ask`
+and MCP `ask` return HTTP 503 with a clear message. Restart with
+`rag-server start --ask` or set `RAG_ASK_ENABLED=true` to re-enable synthesized
+answers. The RAG server itself only uses an OpenAI-compatible client for
+llama.cpp/vLLM; freeing VRAM also requires stopping the separate llama.cpp/vLLM
+server process if it is running.
 
 ### LLM (`llm.yaml`)
 

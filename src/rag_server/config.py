@@ -35,6 +35,15 @@ class Settings(BaseSettings):
         default=APP_PORT, alias="APP_PORT", validation_alias="APP_PORT"
     )
 
+    # Enable synthesized /ask answers through the configured LLM provider.
+    # Set RAG_ASK_ENABLED=false or start with `rag-server start --no-ask` to run
+    # retrieval/MCP without requiring a resident vLLM/llama.cpp/Bedrock model.
+    rag_ask_enabled: bool = Field(
+        default=True,
+        alias="RAG_ASK_ENABLED",
+        validation_alias="RAG_ASK_ENABLED",
+    )
+
     max_upload_size: int = Field(
         default=100 * 1024 * 1024
     )  # 100MB; set MAX_UPLOAD_SIZE env var to override

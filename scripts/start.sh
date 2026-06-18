@@ -31,4 +31,4 @@ cd "$ROOT_DIR"
 export PYTHONPATH="$ROOT_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-"$ROOT_DIR/.venv/bin/python" -m rag_server.cli.main start 2>&1 | tee -a "$LOG_FILE"
+"$ROOT_DIR/.venv/bin/python" -m rag_server.cli.main start "$@" 2>&1 | tee -a "$LOG_FILE"

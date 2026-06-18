@@ -172,32 +172,42 @@ async def rag_lifespan(app: FastAPI):
     logger.info("RetrievalEngine ready")
 
     # ---------------------------------------------------------------------------
-    # Phase 4: LLM Integration
+    # Phase 4: optional LLM Integration
     # ---------------------------------------------------------------------------
-    # Load LLM settings from llm.yaml (project root)
-    llm_settings = get_llm_settings()
-    logger.info(
-        "LLM provider: %s (model=%s)",
-        llm_settings.llm.provider,
-        llm_settings.llm.model,
-    )
+    # Retrieval-only mode keeps the RAG server and MCP retrieve tool available
+    # without requiring a resident inference server. This is useful on single-GPU
+    # workstations where llama.cpp/vLLM would otherwise monopolize VRAM.
+    app.state.llm_provider = None
+    app.state.synthesis_engine = None
+    if settings.rag_ask_enabled:
+        # Load LLM settings from llm.yaml (project root)
+        llm_settings = get_llm_settings()
+        logger.info(
+            "LLM provider: %s (model=%s)",
+            llm_settings.llm.provider,
+            llm_settings.llm.model,
+        )
 
-    # Instantiate the configured provider (AsyncOpenAI client or BedrockProvider)
-    # Provider is lightweight to create — no network connection at init time.
-    llm_provider = create_provider(llm_settings.llm)
-    app.state.llm_provider = llm_provider
+        # Instantiate the configured provider (AsyncOpenAI client or BedrockProvider)
+        # Provider is lightweight to create — no network connection at init time.
+        llm_provider = create_provider(llm_settings.llm)
+        app.state.llm_provider = llm_provider
 
-    # Wire SynthesisEngine with provider and LLM config
-    synthesis_engine = SynthesisEngine(
-        provider=llm_provider,
-        config=llm_settings.llm,
-    )
-    app.state.synthesis_engine = synthesis_engine
-    logger.info(
-        "SynthesisEngine ready (context_chunks=%d, max_context_tokens=%d)",
-        llm_settings.llm.context_chunks,
-        llm_settings.llm.max_context_tokens,
-    )
+        # Wire SynthesisEngine with provider and LLM config
+        synthesis_engine = SynthesisEngine(
+            provider=llm_provider,
+            config=llm_settings.llm,
+        )
+        app.state.synthesis_engine = synthesis_engine
+        logger.info(
+            "SynthesisEngine ready (context_chunks=%d, max_context_tokens=%d)",
+            llm_settings.llm.context_chunks,
+            llm_settings.llm.max_context_tokens,
+        )
+    else:
+        logger.info(
+            "Ask synthesis disabled (RAG_ASK_ENABLED=false); retrieval-only mode active"
+        )
 
     logger.info("RAG Server started (DATA_DIR=%s)", settings.data_dir)
     yield

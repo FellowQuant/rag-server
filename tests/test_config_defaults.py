@@ -31,3 +31,16 @@ class SettingsDefaultsTest(unittest.TestCase):
             settings = Settings()
 
         self.assertEqual(settings.data_dir.resolve(), custom_dir.resolve())
+
+    def test_ask_synthesis_defaults_enabled(self) -> None:
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("RAG_ASK_ENABLED", None)
+            settings = Settings()
+
+        self.assertTrue(settings.rag_ask_enabled)
+
+    def test_ask_synthesis_can_be_disabled_by_env(self) -> None:
+        with patch.dict(os.environ, {"RAG_ASK_ENABLED": "false"}, clear=False):
+            settings = Settings()
+
+        self.assertFalse(settings.rag_ask_enabled)
