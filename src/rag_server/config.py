@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     qdrant_host: str = "localhost"
     qdrant_port: int = 6330
     qdrant_collection: str = "documents"
+    qdrant_timeout_seconds: float = Field(
+        default=120.0,
+        alias="QDRANT_TIMEOUT_SECONDS",
+        validation_alias="QDRANT_TIMEOUT_SECONDS",
+    )
     app_port: int = Field(
         default=APP_PORT, alias="APP_PORT", validation_alias="APP_PORT"
     )
