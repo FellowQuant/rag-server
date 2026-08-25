@@ -20,10 +20,13 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 from rag_server.api.errors import register_exception_handlers
-from rag_server.api.middleware import LoggingMiddleware, UploadSizeLimitMiddleware
+from rag_server.api.middleware import (
+    LoggingMiddleware,
+    OriginDenyMiddleware,
+    UploadSizeLimitMiddleware,
+)
 from rag_server.config import get_settings
 from rag_server.database.engine import async_session, engine
 from rag_server.database.models import Base
@@ -251,18 +254,13 @@ app = FastAPI(
 register_exception_handlers(app)
 
 # Add middleware (LIFO order — last added becomes outermost)
-# Desired runtime order: CORS → Logging → UploadSizeLimit → Router
-# Add in reverse: UploadSizeLimit first (innermost), CORS last (outermost)
+# Desired runtime order: OriginDeny → Logging → UploadSizeLimit → Router
+# Add in reverse: UploadSizeLimit first (innermost), OriginDeny last (outermost)
 app.add_middleware(
     UploadSizeLimitMiddleware, max_upload_size=get_settings().max_upload_size
 )
 app.add_middleware(LoggingMiddleware)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(OriginDenyMiddleware)
 
 # Mount document lifecycle router.
 from rag_server.api.documents import router as documents_router  # noqa: E402

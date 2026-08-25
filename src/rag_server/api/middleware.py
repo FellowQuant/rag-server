@@ -1,8 +1,9 @@
 """HTTP middleware for the RAG Server API.
 
-Two middleware classes:
+Three middleware classes:
 - LoggingMiddleware: logs method, path, status code, and duration for every request
 - UploadSizeLimitMiddleware: rejects uploads exceeding the configured size limit via Content-Length check
+- OriginDenyMiddleware: blocks browser-origin requests to the local unauthenticated service
 """
 
 import logging
@@ -33,6 +34,29 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             duration_ms,
         )
         return response
+
+
+class OriginDenyMiddleware(BaseHTTPMiddleware):
+    """Reject browser-origin requests to the loopback-only unauthenticated API.
+
+    CORS response headers alone do not prevent browsers from sending simple
+    multipart requests. Rejecting every request carrying Origin keeps browser
+    pages from mutating the local REST or MCP surfaces while preserving access
+    for local CLI and MCP clients, which do not send Origin.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        if request.headers.get("origin") is not None:
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "type": "about:blank",
+                    "title": "Forbidden",
+                    "status": 403,
+                    "detail": "Browser-origin requests are not allowed",
+                },
+            )
+        return await call_next(request)
 
 
 class UploadSizeLimitMiddleware(BaseHTTPMiddleware):

@@ -3,8 +3,8 @@ services:
     image: qdrant/qdrant:v1.16.3
     container_name: rag-qdrant
     ports:
-      - "6330:6333"
-      - "6331:6334"
+      - "127.0.0.1:6330:6333"
+      - "127.0.0.1:6331:6334"
     volumes:
       - ./data/qdrant:/qdrant/storage:z
     environment:
@@ -21,12 +21,13 @@ services:
     build: .
     container_name: rag-server
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     volumes:
       - ./data:/app/data:z
     environment:
       - DATA_DIR=/app/data
       - QDRANT_HOST=qdrant
+      - APP_BIND_HOST=0.0.0.0
     depends_on:
       qdrant:
         condition: service_healthy

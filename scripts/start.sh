@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 LOG_DIR="$ROOT_DIR/.logs"
 LOG_FILE="$LOG_DIR/rag_server.log"
+BIND_HOST="${APP_BIND_HOST:-127.0.0.1}"
 
 mkdir -p "$LOG_DIR"
 
@@ -16,8 +17,8 @@ RESET='\033[0m'
 printf "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n"
 printf "${BOLD}  FellowQuant RAG Server${RESET}\n"
 printf "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n"
-printf "  URL  : ${YELLOW}http://0.0.0.0:8001${RESET}\n"
-printf "  Docs : ${YELLOW}http://0.0.0.0:8001/docs${RESET}\n"
+printf "  URL  : ${YELLOW}http://%s:8001${RESET}\n" "$BIND_HOST"
+printf "  Docs : ${YELLOW}http://%s:8001/docs${RESET}\n" "$BIND_HOST"
 printf "  Log  : ${YELLOW}%s${RESET}\n" "$LOG_FILE"
 printf "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n\n"
 

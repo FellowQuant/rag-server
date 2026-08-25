@@ -72,7 +72,7 @@ async def ask(
                 "Ask synthesis is disabled for this RAG server instance. "
                 "Restart with `rag-server start --ask` or set RAG_ASK_ENABLED=true "
                 "to enable LLM-backed answers; use /retrieve or MCP retrieve for "
-                "model-free retrieval."
+                "generation-LLM-free retrieval."
             ),
         )
 

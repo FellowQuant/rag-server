@@ -12,7 +12,7 @@ import sys
 import os
 from pathlib import Path
 
-from rag_server.config import APP_BIND_HOST, get_settings
+from rag_server.config import get_settings
 
 
 def is_port_open(
@@ -48,7 +48,7 @@ def cmd_start(ask_enabled: bool | None = None) -> None:
     print(f"Starting RAG server with ask synthesis {ask_mode}.", file=sys.stderr)
     uvicorn.run(
         "rag_server.main:app",
-        host=APP_BIND_HOST,
+        host=settings.app_bind_host,
         port=settings.app_port,
         log_level="info",
     )

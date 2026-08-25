@@ -84,7 +84,7 @@ uv run alembic upgrade head
 ./scripts/start.sh
 ```
 
-This sets `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` (prevents CUDA memory fragmentation stalls), binds to `0.0.0.0:8001` with hot-reload, and tees logs to `.logs/rag_server.log`.
+This sets `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` (prevents CUDA memory fragmentation stalls), binds to loopback-only `127.0.0.1:8001`, and tees logs to `.logs/rag_server.log`. Browser-origin requests are rejected because this local service does not expose an authentication layer. The Compose app binds `0.0.0.0` only inside its container while publishing RAG and Qdrant ports exclusively on host loopback.
 
 ## REST API
 
