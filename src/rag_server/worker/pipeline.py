@@ -32,11 +32,15 @@ import os
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import create_engine, delete
+from sqlalchemy import create_engine, delete, event
 from sqlalchemy.orm import Session
 
 from rag_server.config import get_settings
 from rag_server.database.models import Chunk, Document
+from rag_server.database.sqlite_config import (
+    SQLITE_BUSY_TIMEOUT_MS,
+    configure_sqlite_connection,
+)
 from rag_server.ingestion.chunker import ParsedChunk, ParsedChunkBatch
 from rag_server.ingestion.embedder import Embedder
 from rag_server.worker.resource_guard import ResourceGuard, ResourceLimitExceeded
@@ -70,7 +74,12 @@ def _get_sync_engine(async_sqlite_url: str):
     FastAPI uses sqlite+aiosqlite:///path; worker needs sqlite:///path.
     """
     sync_url = async_sqlite_url.replace("sqlite+aiosqlite://", "sqlite://")
-    return create_engine(sync_url)
+    engine = create_engine(
+        sync_url,
+        connect_args={"timeout": SQLITE_BUSY_TIMEOUT_MS / 1000},
+    )
+    event.listen(engine, "connect", configure_sqlite_connection)
+    return engine
 
 
 def _dispatch_parser(
@@ -341,6 +350,29 @@ def run_pipeline(
     result_queue: multiprocessing.Queue | None = None,
     resource_guard: ResourceGuard | None = None,
 ) -> None:
+    """Run one ingestion job and always release its SQLite connection pool."""
+    engine = _get_sync_engine(job.sqlite_url)
+    try:
+        _run_pipeline_with_engine(
+            job,
+            converter,
+            embedder,
+            engine,
+            result_queue=result_queue,
+            resource_guard=resource_guard,
+        )
+    finally:
+        engine.dispose()
+
+
+def _run_pipeline_with_engine(
+    job,
+    converter: DocumentConverter | None,
+    embedder: Embedder,
+    engine,
+    result_queue: multiprocessing.Queue | None = None,
+    resource_guard: ResourceGuard | None = None,
+) -> None:
     """Execute the full ingestion pipeline for one IngestionJob.
 
     Args:
@@ -355,7 +387,6 @@ def run_pipeline(
                       process (e.g., BM25 rebuild needed after indexing).
     """
     document_id = job.document_id
-    engine = _get_sync_engine(job.sqlite_url)
     if resource_guard is None:
         resource_guard = ResourceGuard.from_settings(get_settings())
 

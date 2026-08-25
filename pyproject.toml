@@ -37,6 +37,12 @@ dependencies = [
     "pypdfium2>=5.5.0",
 ]
 
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+]
+
 [project.scripts]
 rag-server = "rag_server.cli.main:main"
 

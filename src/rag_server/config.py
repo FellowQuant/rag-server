@@ -5,8 +5,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 APP_PORT = 8001
-APP_BIND_HOST = "0.0.0.0"
 LOCALHOST = "127.0.0.1"
+APP_BIND_HOST = LOCALHOST
 MCP_PATH = "/mcp"
 
 
@@ -31,8 +31,27 @@ class Settings(BaseSettings):
     qdrant_host: str = "localhost"
     qdrant_port: int = 6330
     qdrant_collection: str = "documents"
+    qdrant_timeout_seconds: float = Field(
+        default=120.0,
+        alias="QDRANT_TIMEOUT_SECONDS",
+        validation_alias="QDRANT_TIMEOUT_SECONDS",
+    )
     app_port: int = Field(
         default=APP_PORT, alias="APP_PORT", validation_alias="APP_PORT"
+    )
+    app_bind_host: str = Field(
+        default=APP_BIND_HOST,
+        alias="APP_BIND_HOST",
+        validation_alias="APP_BIND_HOST",
+    )
+
+    # Enable synthesized /ask answers through the configured LLM provider.
+    # Set RAG_ASK_ENABLED=false or start with `rag-server start --no-ask` to run
+    # retrieval/MCP without requiring a resident vLLM/llama.cpp/Bedrock model.
+    rag_ask_enabled: bool = Field(
+        default=True,
+        alias="RAG_ASK_ENABLED",
+        validation_alias="RAG_ASK_ENABLED",
     )
 
     max_upload_size: int = Field(

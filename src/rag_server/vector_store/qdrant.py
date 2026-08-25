@@ -53,6 +53,7 @@ class QdrantStore:
         # belt-and-suspenders for any future drift.
         self._client = AsyncQdrantClient(
             url=self._settings.qdrant_url,
+            timeout=self._settings.qdrant_timeout_seconds,
             check_compatibility=False,  # suppress version-mismatch UserWarning
         )
         self._collection = self._settings.qdrant_collection

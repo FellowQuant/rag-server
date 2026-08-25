@@ -9,9 +9,10 @@ cmd_start_qdrant: Check port 6330, skip if running; otherwise start via embedded
 import socket
 import subprocess
 import sys
+import os
 from pathlib import Path
 
-from rag_server.config import APP_BIND_HOST, get_settings
+from rag_server.config import get_settings
 
 
 def is_port_open(
@@ -23,7 +24,7 @@ def is_port_open(
         return s.connect_ex((host, port)) == 0
 
 
-def cmd_start() -> None:
+def cmd_start(ask_enabled: bool | None = None) -> None:
     """Launch FastAPI server on port 8001 via uvicorn.
 
     multiprocessing.set_start_method("spawn") is called at module top level in
@@ -33,10 +34,21 @@ def cmd_start() -> None:
     """
     import uvicorn
 
+    if ask_enabled is not None:
+        # Pydantic Settings reads env at import-time/call-time; set before the
+        # app module is loaded by uvicorn so lifespan sees the selected mode.
+        os.environ["RAG_ASK_ENABLED"] = "true" if ask_enabled else "false"
+        get_settings.cache_clear()
+
     settings = get_settings()
+    if ask_enabled is None:
+        ask_mode = "enabled" if settings.rag_ask_enabled else "disabled"
+    else:
+        ask_mode = "enabled" if ask_enabled else "disabled"
+    print(f"Starting RAG server with ask synthesis {ask_mode}.", file=sys.stderr)
     uvicorn.run(
         "rag_server.main:app",
-        host=APP_BIND_HOST,
+        host=settings.app_bind_host,
         port=settings.app_port,
         log_level="info",
     )

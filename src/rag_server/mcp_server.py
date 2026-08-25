@@ -1,6 +1,5 @@
 import logging
 import sys
-from pathlib import Path
 
 import httpx
 from fastmcp import Context, FastMCP
@@ -50,13 +49,12 @@ async def _request_json(
     path: str,
     *,
     json_body: dict | None = None,
-    files: dict | None = None,
     timeout: float = 300.0,
 ) -> dict:
     url = _api_url(path)
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.request(method, url, json=json_body, files=files)
+            response = await client.request(method, url, json=json_body)
     except httpx.ConnectError as exc:
         raise ToolError(
             f"RAG_SERVER_UNAVAILABLE: start the server first with `rag-server start` ({exc})"
@@ -162,23 +160,6 @@ async def delete_document(document_id: str, ctx: Context) -> dict:
     del ctx
     await _request_json("DELETE", f"/api/v1/documents/{document_id}")
     return {"deleted": True, "document_id": document_id}
-
-
-@mcp.tool()
-async def upload_document(file_path: str, ctx: Context) -> dict:
-    """Upload a local document file for indexing through the shared REST server."""
-    del ctx
-    path = Path(file_path).expanduser()
-    if not path.exists():
-        raise ToolError(f"FILE_NOT_FOUND: {file_path}")
-    if not path.is_file():
-        raise ToolError(f"NOT_A_FILE: {file_path}")
-
-    file_bytes = path.read_bytes()
-    files = {
-        "file": (path.name, file_bytes, "application/octet-stream"),
-    }
-    return await _request_json("POST", "/api/v1/documents", files=files, timeout=1800.0)
 
 
 if __name__ == "__main__":

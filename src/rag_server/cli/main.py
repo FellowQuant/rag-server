@@ -11,10 +11,11 @@ from pathlib import Path
 SENTINEL = Path.home() / ".rag-server" / "setup-done"
 
 USAGE = """\
-Usage: rag-server <command>
+Usage: rag-server <command> [options]
 
 Commands:
   start          Launch FastAPI server (port 8001)
+                 Options: --ask, --no-ask
   mcp            Start legacy stdio MCP compatibility mode
   start-qdrant   Start Qdrant via Docker
   setup          Configure MCP registration (re-runnable)
@@ -66,7 +67,19 @@ def main() -> None:
     if cmd == "start":
         from rag_server.cli.commands import cmd_start
 
-        cmd_start()
+        args = sys.argv[2:]
+        ask_enabled = None
+        for arg in args:
+            if arg == "--ask":
+                ask_enabled = True
+            elif arg == "--no-ask":
+                ask_enabled = False
+            else:
+                print(f"Unknown start option: {arg!r}", file=sys.stderr)
+                print(USAGE, end="", file=sys.stderr)
+                sys.exit(1)
+
+        cmd_start(ask_enabled=ask_enabled)
     elif cmd == "start-qdrant":
         from rag_server.cli.commands import cmd_start_qdrant
 

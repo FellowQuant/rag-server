@@ -281,3 +281,57 @@ def test_run_pipeline_marks_failed_when_resource_retry_limit_is_exhausted(
     assert chunks == []
     assert doc.status == "failed"
     assert "unsafe at after-parse" in doc.error_msg
+
+
+def test_sync_worker_engine_uses_wal_and_waits_for_transient_locks(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "rag.db"
+    engine = pipeline._get_sync_engine(f"sqlite+aiosqlite:///{db_path}")
+
+    try:
+        with engine.connect() as connection:
+            journal_mode = connection.exec_driver_sql(
+                "PRAGMA journal_mode"
+            ).scalar_one()
+            busy_timeout = connection.exec_driver_sql(
+                "PRAGMA busy_timeout"
+            ).scalar_one()
+    finally:
+        engine.dispose()
+
+    assert journal_mode == "wal"
+    assert busy_timeout == 60_000
+
+
+def test_run_pipeline_disposes_worker_engine_after_failure(monkeypatch) -> None:
+    class FakeEngine:
+        disposed = False
+
+        def dispose(self) -> None:
+            self.disposed = True
+
+    engine = FakeEngine()
+    job = FakeJob(
+        document_id="doc-lock",
+        file_path="/tmp/locked.tex",
+        file_format="tex",
+        original_filename="locked.tex",
+        sqlite_url="sqlite+aiosqlite:////tmp/locked.db",
+        qdrant_url="http://localhost:6330",
+        qdrant_collection="documents",
+    )
+
+    monkeypatch.setattr(pipeline, "_get_sync_engine", lambda _url: engine)
+
+    def fail_status_update(*_args, **_kwargs) -> None:
+        raise RuntimeError("simulated SQLite lock failure")
+
+    monkeypatch.setattr(pipeline, "_set_document_status", fail_status_update)
+
+    import pytest
+
+    with pytest.raises(RuntimeError, match="simulated SQLite lock failure"):
+        pipeline.run_pipeline(job, None, object())
+
+    assert engine.disposed is True
