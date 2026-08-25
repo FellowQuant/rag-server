@@ -1,17 +1,24 @@
 from collections.abc import AsyncGenerator
+
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
+
 from rag_server.config import get_settings
+from rag_server.database.sqlite_config import (
+    SQLITE_BUSY_TIMEOUT_MS,
+    configure_sqlite_connection,
+)
 
 settings = get_settings()
 
 engine = create_async_engine(
     settings.sqlite_url,
     echo=False,  # Set True for SQL debugging
+    connect_args={"timeout": SQLITE_BUSY_TIMEOUT_MS / 1000},
 )
 
 # CRITICAL: expire_on_commit=False — prevents MissingGreenlet on post-commit attribute access
@@ -26,9 +33,8 @@ async_session: async_sessionmaker[AsyncSession] = async_sessionmaker(
 # Must be set per connection via event listener (research finding #2b)
 @event.listens_for(engine.sync_engine, "connect")
 def set_sqlite_pragma(dbapi_conn, connection_record) -> None:
-    cursor = dbapi_conn.cursor()
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.close()
+    del connection_record
+    configure_sqlite_connection(dbapi_conn)
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
